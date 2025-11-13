@@ -19,6 +19,14 @@ interface Question {
   commentary: string
 }
 
+interface Answer {
+  playerId: string
+  questionId: number
+  answer: string | null
+  isCorrect: boolean
+  timeTakenMs: number
+}
+
 interface GameState {
   roomCode: string
   status: 'lobby' | 'playing' | 'finished'
@@ -26,7 +34,8 @@ interface GameState {
   questionCount: number
   currentQuestionIndex: number
   questions: Question[]
-  answers: Map<string, { answer: string | null, timeTakenMs: number }>
+  answers: Answer[]
+  currentQuestionAnswers: Set<string>
   timer: number | null
 }
 
@@ -44,7 +53,8 @@ export class GameRoom extends DurableObject {
       questionCount: 10,
       currentQuestionIndex: 0,
       questions: [],
-      answers: new Map(),
+      answers: [],
+      currentQuestionAnswers: new Set(),
       timer: null
     }
   }
@@ -1368,7 +1378,7 @@ export class GameRoom extends DurableObject {
     }
 
     const question = this.state.questions[this.state.currentQuestionIndex]
-    this.state.answers.clear()
+    this.state.currentQuestionAnswers.clear()
     this.state.timer = 15
 
     // Send question to all players (without correct answer)
@@ -1418,14 +1428,26 @@ export class GameRoom extends DurableObject {
   }
 
   private handleAnswer(playerId: string, answer: string | null, timeTakenMs: number) {
-    if (this.state.answers.has(playerId)) {
-      return // Already answered
+    if (this.state.currentQuestionAnswers.has(playerId)) {
+      return // Already answered this question
     }
 
-    this.state.answers.set(playerId, { answer, timeTakenMs })
+    const question = this.state.questions[this.state.currentQuestionIndex]
+    const isCorrect = answer === question.correctAnswer
+
+    // Store complete answer data
+    this.state.answers.push({
+      playerId,
+      questionId: question.id,
+      answer,
+      isCorrect,
+      timeTakenMs
+    })
+
+    this.state.currentQuestionAnswers.add(playerId)
 
     // Check if all players have answered
-    if (this.state.answers.size === this.state.players.size) {
+    if (this.state.currentQuestionAnswers.size === this.state.players.size) {
       this.endQuestion()
     }
   }
@@ -1438,12 +1460,13 @@ export class GameRoom extends DurableObject {
 
     const question = this.state.questions[this.state.currentQuestionIndex]
 
-    // Calculate scores
-    for (const [playerId, answerData] of this.state.answers.entries()) {
-      const player = this.state.players.get(playerId)
+    // Calculate scores for current question
+    const currentAnswers = this.state.answers.filter(a => a.questionId === question.id)
+    for (const answerData of currentAnswers) {
+      const player = this.state.players.get(answerData.playerId)
       if (!player) continue
 
-      if (answerData.answer === question.correctAnswer) {
+      if (answerData.isCorrect) {
         // Award points based on speed
         const timeBonus = Math.max(0, 1000 - answerData.timeTakenMs)
         const points = Math.floor(1000 + timeBonus)
@@ -1499,9 +1522,9 @@ export class GameRoom extends DurableObject {
   private handleGetResults() {
     // Calculate player statistics
     const playersWithStats = Array.from(this.state.players.values()).map(player => {
-      const answers = Array.from(this.state.answers.values()).filter(a => a.playerId === player.id)
-      const correctAnswers = answers.filter(a => a.isCorrect).length
-      const totalAnswers = answers.length
+      const playerAnswers = this.state.answers.filter(a => a.playerId === player.id)
+      const correctAnswers = playerAnswers.filter(a => a.isCorrect).length
+      const totalAnswers = playerAnswers.length
 
       return {
         id: player.id,
