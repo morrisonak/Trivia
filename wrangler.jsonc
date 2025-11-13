@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "trivia-app",
+  "compatibility_date": "2025-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./server-entry.ts",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "trivia-db",
+      "database_id": "a72ebdc7-c3a5-4878-9892-89f7ac43aa7a",
+      "preview_database_id": "a72ebdc7-c3a5-4878-9892-89f7ac43aa7a"
+    }
+  ]
+}
