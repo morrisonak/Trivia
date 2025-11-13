@@ -104,7 +104,7 @@ function BigBoardDisplay() {
   const renderLobby = () => (
     <div className="flex flex-col items-center justify-center min-h-screen p-8">
       <div className="text-center mb-12">
-        <h1 className="text-8xl font-black text-white mb-4">TRIVIA BATTLE</h1>
+        <h1 className="text-8xl font-black text-white mb-4">TRIVIA NIGHTS</h1>
         <div className="text-6xl font-mono font-bold text-yellow-400 tracking-wider mb-4">
           {formatRoomCode(roomCode)}
         </div>

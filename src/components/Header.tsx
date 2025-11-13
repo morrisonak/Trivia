@@ -26,7 +26,7 @@ export default function Header() {
         <h1 className="ml-4 text-xl font-semibold">
           <Link to="/" className="flex items-center gap-2">
             <Gamepad2 className="h-8 w-8 text-yellow-400" />
-            <span className="font-black">TRIVIA BATTLE</span>
+            <span className="font-black">TRIVIA NIGHTS</span>
           </Link>
         </h1>
       </header>
@@ -131,7 +131,7 @@ export default function Header() {
 
         <div className="p-4 border-t border-gray-700">
           <p className="text-xs text-gray-400 text-center">
-            Trivia Battle v1.0.0
+            Trivia Nights v1.0.0
           </p>
         </div>
       </aside>

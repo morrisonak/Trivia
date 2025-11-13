@@ -47,12 +47,12 @@ function HomePage() {
             <h1 className="text-6xl md:text-8xl font-black text-white mb-6 tracking-tight">
               TRIVIA
               <span className="block text-4xl md:text-6xl bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                BATTLE
+                NIGHTS
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-200 mb-8 max-w-2xl mx-auto">
-              The multiplayer trivia game that brings friends together for quick,
-              hilarious battles of wit
+              The multiplayer trivia game that brings friends together for epic
+              nights of wit and wisdom
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
