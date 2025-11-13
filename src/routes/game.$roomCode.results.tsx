@@ -33,6 +33,7 @@ function GameResults() {
   const [results, setResults] = useState<GameResults | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [creatingGame, setCreatingGame] = useState(false)
 
   const playerId = sessionStorage.getItem('playerId')
   const playerName = sessionStorage.getItem('playerName')
@@ -61,9 +62,43 @@ function GameResults() {
     }
   }
 
-  const playAgain = () => {
-    sessionStorage.clear()
-    navigate({ to: '/game/create' })
+  const playAgain = async () => {
+    if (!playerName || creatingGame) return
+
+    setCreatingGame(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/games/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerName: playerName.trim(),
+          maxPlayers: 4,
+          questionCount: 10,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create game')
+      }
+
+      // Store new game info in session storage
+      sessionStorage.setItem('playerId', data.player.id)
+      sessionStorage.setItem('playerName', data.player.name)
+      sessionStorage.setItem('isHost', 'true')
+
+      // Navigate to new game lobby
+      navigate({
+        to: '/game/$roomCode',
+        params: { roomCode: data.game.roomCode },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create game')
+      setCreatingGame(false)
+    }
   }
 
   const goHome = () => {
@@ -240,14 +275,25 @@ function GameResults() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button
             onClick={playAgain}
-            className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-full shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-2"
+            disabled={creatingGame}
+            className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 [@media(hover:hover)]:hover:from-green-600 [@media(hover:hover)]:hover:to-emerald-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold rounded-full shadow-lg transform transition [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            <RotateCcw className="w-5 h-5" />
-            Play Again
+            {creatingGame ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Creating Game...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="w-5 h-5" />
+                Play Again
+              </>
+            )}
           </button>
           <button
             onClick={goHome}
-            className="px-8 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-full shadow-lg transform transition hover:scale-105 border border-white/20 flex items-center justify-center gap-2"
+            disabled={creatingGame}
+            className="px-8 py-3 bg-white/10 [@media(hover:hover)]:hover:bg-white/20 text-white font-bold rounded-full shadow-lg transform transition [@media(hover:hover)]:hover:scale-105 border border-white/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Home className="w-5 h-5" />
             Back to Home
