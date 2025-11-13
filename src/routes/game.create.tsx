@@ -4,6 +4,7 @@ import { Gamepad2, Users, Timer, HelpCircle } from 'lucide-react'
 
 export const Route = createFileRoute('/game/create')({
   component: CreateGame,
+  ssr: false,
 })
 
 function CreateGame() {
@@ -43,7 +44,6 @@ function CreateGame() {
       }
 
       // Store game info in session storage
-      sessionStorage.setItem('gameId', data.game.id)
       sessionStorage.setItem('playerId', data.player.id)
       sessionStorage.setItem('playerName', data.player.name)
       sessionStorage.setItem('isHost', 'true')

@@ -4,6 +4,7 @@ import { Gamepad2, Hash } from 'lucide-react'
 
 export const Route = createFileRoute('/game/join')({
   component: JoinGame,
+  ssr: false,
 })
 
 function JoinGame() {
@@ -46,7 +47,6 @@ function JoinGame() {
       }
 
       // Store game info in session storage
-      sessionStorage.setItem('gameId', data.game.id)
       sessionStorage.setItem('playerId', data.player.id)
       sessionStorage.setItem('playerName', data.player.name)
       sessionStorage.setItem('isHost', 'false')

@@ -5,6 +5,7 @@ import { getRankEmoji } from '@/lib/scoring'
 
 export const Route = createFileRoute('/game/$roomCode/results')({
   component: GameResults,
+  ssr: false, // Uses sessionStorage - client-only
 })
 
 interface Player {

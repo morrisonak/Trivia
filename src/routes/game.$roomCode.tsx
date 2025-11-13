@@ -1,10 +1,11 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { Users, Copy, Check, Play, Crown, Loader2 } from 'lucide-react'
 import { formatRoomCode } from '@/lib/room-codes'
 
 export const Route = createFileRoute('/game/$roomCode')({
   component: GameLobby,
+  ssr: false,
 })
 
 interface Player {
@@ -26,6 +27,8 @@ interface GameState {
 function GameLobby() {
   const { roomCode } = Route.useParams()
   const navigate = useNavigate()
+  const matchRoute = useMatchRoute()
+  const isExactMatch = matchRoute({ to: '/game/$roomCode', params: { roomCode }, fuzzy: false })
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -38,6 +41,15 @@ function GameLobby() {
   const [isHost, setIsHost] = useState(false)
 
   useEffect(() => {
+    // If we're on a child route, stop polling and don't run lobby logic
+    if (!isExactMatch) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      return
+    }
+
     // Read from sessionStorage only in useEffect (client-side only)
     const storedPlayerId = sessionStorage.getItem('playerId')
     const storedPlayerName = sessionStorage.getItem('playerName')
@@ -52,67 +64,49 @@ function GameLobby() {
       return
     }
 
-    // Only run lobby logic if we're actually on the lobby page
-    // If we're on the play page, don't start polling or clear flags
-    const currentPath = window.location.pathname
-    if (currentPath.includes('/play')) {
-      console.log('Already on play page, not starting lobby polling')
-      return
-    }
-
-    // Clear navigation flag when entering lobby
-    sessionStorage.removeItem('navigatedToPlay')
-
     // Initial load - fetch game state
     fetchGameState()
 
-    // Poll for updates (temporary until WebSockets are implemented)
+    // Poll for updates every 2 seconds
     intervalRef.current = setInterval(fetchGameState, 2000)
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
+        intervalRef.current = null
       }
     }
-  }, [roomCode])
+  }, [roomCode, isExactMatch])
 
   const fetchGameState = async () => {
-    // Don't fetch if we've already started navigating
-    if (sessionStorage.getItem('navigatedToPlay')) {
-      console.log('Already navigated, skipping fetch')
-      return
-    }
-
     try {
       const response = await fetch(`/api/games/${roomCode}`)
       if (!response.ok) {
         throw new Error('Failed to fetch game state')
       }
       const data = await response.json()
-      console.log('Game state fetched:', data)
       setGameState(data)
       setLoading(false)
 
-      // If game has started and we haven't navigated yet, navigate to play page
-      if (data.status === 'playing') {
-        console.log('Game is playing, navigating to play page...')
-
-        // Mark that we've navigated to prevent loops BEFORE navigating
-        sessionStorage.setItem('navigatedToPlay', 'true')
-
-        // Clear the polling interval before navigation
+      // If game has started, navigate to play page
+      if (data.status === 'playing' && isExactMatch) {
+        // Clear polling before navigation
         if (intervalRef.current) {
-          console.log('Clearing polling interval before navigation')
           clearInterval(intervalRef.current)
           intervalRef.current = null
         }
 
-        // Navigate with player info in URL to avoid SSR issues
-        // Read directly from sessionStorage here since state might not be updated yet
+        // Navigate to play page
         const currentPlayerId = sessionStorage.getItem('playerId')
         const currentPlayerName = sessionStorage.getItem('playerName')
-        console.log('Navigating with window.location.href')
-        window.location.href = `/game/${roomCode}/play?playerId=${currentPlayerId}&playerName=${encodeURIComponent(currentPlayerName || '')}`
+        navigate({
+          to: '/game/$roomCode/play',
+          params: { roomCode },
+          search: {
+            playerId: currentPlayerId || '',
+            playerName: currentPlayerName || ''
+          }
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game')
@@ -141,20 +135,7 @@ function GameLobby() {
         throw new Error(data.error || 'Failed to start game')
       }
 
-      // Clear the polling interval
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-
-      // Mark navigation flag
-      sessionStorage.setItem('navigatedToPlay', 'true')
-
-      // Navigate immediately for the host with player info in URL
-      // Read directly from sessionStorage since state might not be updated yet
-      const currentPlayerId = sessionStorage.getItem('playerId')
-      const currentPlayerName = sessionStorage.getItem('playerName')
-      window.location.href = `/game/${roomCode}/play?playerId=${currentPlayerId}&playerName=${encodeURIComponent(currentPlayerName || '')}`
+      // Game started successfully - polling will detect it and navigate
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start game')
     }
@@ -190,6 +171,11 @@ function GameLobby() {
   }
 
   const canStart = isHost && gameState.players.length >= 2
+
+  // If we're on a child route (like /play), render the child instead of the lobby
+  if (!isExactMatch) {
+    return <Outlet />
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center px-4">

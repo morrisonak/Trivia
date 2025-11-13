@@ -29,9 +29,6 @@ function GamePlayComponent() {
   const { roomCode } = Route.useParams()
   const navigate = Route.useNavigate()
 
-  // Client-only mounting guard
-  const [isMounted, setIsMounted] = useState(false)
-
   const [gameState, setGameState] = useState<GameState>({
     currentQuestion: null,
     questionNumber: 0,
@@ -51,12 +48,6 @@ function GamePlayComponent() {
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isMounted) return
-
     // Get player info from URL params or sessionStorage as fallback
     const urlParams = new URLSearchParams(window.location.search)
     const urlPlayerId = urlParams.get('playerId')
@@ -84,7 +75,7 @@ function GamePlayComponent() {
         wsRef.current.close()
       }
     }
-  }, [roomCode, isMounted])
+  }, [roomCode])
 
   const connectWebSocket = (playerId: string) => {
     console.log('Connecting to WebSocket for room:', roomCode, 'player:', playerId)
@@ -218,15 +209,6 @@ function GamePlayComponent() {
     return null
   }
 
-  // Don't render anything until mounted on client
-  if (!isMounted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-white animate-spin" />
-      </div>
-    )
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
@@ -346,4 +328,5 @@ function GamePlayComponent() {
 
 export const Route = createFileRoute('/game/$roomCode/play')({
   component: GamePlayComponent,
+  ssr: false,
 })

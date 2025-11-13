@@ -19,8 +19,14 @@ async function testGameFlow() {
   const page2 = await browser2.newPage();
 
   // Enable console logging
-  page1.on('console', msg => console.log('Player 1 Console:', msg.text()));
-  page2.on('console', msg => console.log('Player 2 Console:', msg.text()));
+  page1.on('console', async msg => {
+    const args = await Promise.all(msg.args().map(arg => arg.jsonValue().catch(() => arg.toString())));
+    console.log('Player 1 Console:', ...args);
+  });
+  page2.on('console', async msg => {
+    const args = await Promise.all(msg.args().map(arg => arg.jsonValue().catch(() => arg.toString())));
+    console.log('Player 2 Console:', ...args);
+  });
 
   // Enable error logging
   page1.on('pageerror', err => console.error('Player 1 Error:', err.message));

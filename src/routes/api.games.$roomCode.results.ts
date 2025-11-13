@@ -1,7 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { drizzle } from 'drizzle-orm/d1'
-import { games, gamePlayers, playerAnswers, gameQuestions } from '@/db/schema'
-import { sql, eq } from 'drizzle-orm'
 
 export const Route = createFileRoute('/api/games/$roomCode/results')({
   server: {
@@ -11,103 +8,36 @@ export const Route = createFileRoute('/api/games/$roomCode/results')({
         // @ts-expect-error - Cloudflare types
         const env = request.env
 
-        if (!env?.DB) {
+        if (!env?.GAME_ROOM) {
           return Response.json(
-            { error: 'D1 database binding not found' },
+            { error: 'Durable Object binding not found' },
             { status: 500 }
           )
         }
 
-        const db = drizzle(env.DB)
-
         try {
-          // Find game by room code
-          const [game] = await db
-            .select()
-            .from(games)
-            .where(eq(games.roomCode, roomCode.toUpperCase()))
-            .limit(1)
+          // Get Durable Object stub
+          const id = env.GAME_ROOM.idFromName(roomCode.toUpperCase())
+          const stub = env.GAME_ROOM.get(id)
 
-          if (!game) {
+          // Forward request to Durable Object
+          const doResponse = await stub.fetch(`http://do/results`, {
+            method: 'GET'
+          })
+
+          if (!doResponse.ok) {
             return Response.json(
-              { error: 'Game not found' },
-              { status: 404 }
+              { error: 'Failed to get results from game room' },
+              { status: doResponse.status }
             )
           }
 
-          // Get all players with their stats
-          const players = await db
-            .select({
-              id: gamePlayers.id,
-              name: gamePlayers.playerName,
-              score: gamePlayers.score,
-            })
-            .from(gamePlayers)
-            .where(
-              sql`${gamePlayers.gameId} = ${game.id} AND ${gamePlayers.isDisplay} = 0`
-            )
-            .orderBy(sql`${gamePlayers.score} DESC`)
-
-          // Get total questions count
-          const totalQuestionsResult = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(gameQuestions)
-            .where(eq(gameQuestions.gameId, game.id))
-
-          const totalQuestions = totalQuestionsResult[0].count
-
-          // Get detailed stats for each player
-          const playersWithStats = await Promise.all(
-            players.map(async (player) => {
-              const answers = await db
-                .select({
-                  isCorrect: playerAnswers.isCorrect,
-                })
-                .from(playerAnswers)
-                .where(
-                  sql`${playerAnswers.gameId} = ${game.id} AND ${playerAnswers.playerId} = ${player.id}`
-                )
-
-              const correctAnswers = answers.filter((a) => a.isCorrect).length
-              const totalAnswers = answers.length
-              const accuracy = totalAnswers > 0
-                ? Math.round((correctAnswers / totalAnswers) * 100)
-                : 0
-
-              return {
-                ...player,
-                correctAnswers,
-                totalAnswers,
-                accuracy,
-              }
-            })
-          )
-
-          // Calculate game statistics
-          const scores = playersWithStats.map((p) => p.score)
-          const averageScore = scores.length > 0
-            ? scores.reduce((a, b) => a + b, 0) / scores.length
-            : 0
-          const highestScore = scores.length > 0
-            ? Math.max(...scores)
-            : 0
-
-          // Determine winner
-          const winner = playersWithStats.length > 0 ? playersWithStats[0] : null
-
-          return Response.json({
-            players: playersWithStats,
-            winner,
-            gameStats: {
-              totalQuestions,
-              averageScore,
-              highestScore,
-            },
-          })
+          const results = await doResponse.json()
+          return Response.json(results)
         } catch (error) {
           console.error('Get results error:', error)
           return Response.json(
-            { error: 'Failed to get results', details: error },
+            { error: 'Failed to get results', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
           )
         }
