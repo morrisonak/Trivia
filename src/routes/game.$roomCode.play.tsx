@@ -181,7 +181,7 @@ function GamePlayComponent() {
 
   const getButtonClass = (option: string) => {
     if (!gameState.showResults) {
-      return 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+      return 'bg-white/10 border-white/20 text-white [@media(hover:hover)]:hover:bg-white/20'
     }
 
     if (option === gameState.correctAnswer) {
@@ -272,7 +272,7 @@ function GamePlayComponent() {
                 key={option.key}
                 onClick={() => handleAnswer(option.key)}
                 disabled={gameState.hasAnswered}
-                className={`p-4 rounded-lg border-2 font-medium transition-all transform hover:scale-105 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-between ${getButtonClass(option.key)}`}
+                className={`p-4 rounded-lg border-2 font-medium transition-all transform [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-between ${getButtonClass(option.key)}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl font-bold">{option.key}</span>
