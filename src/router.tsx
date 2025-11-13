@@ -13,6 +13,8 @@ export const getRouter = () => {
     routeTree,
     context: { ...rqContext },
     defaultPreload: 'intent',
+    // Disable SSR for entire app to avoid hydration issues
+    defaultSsr: false,
     Wrap: (props: { children: React.ReactNode }) => {
       return (
         <TanstackQuery.Provider {...rqContext}>
@@ -22,7 +24,8 @@ export const getRouter = () => {
     },
   })
 
-  setupRouterSsrQueryIntegration({ router, queryClient: rqContext.queryClient })
+  // SSR disabled - no need for SSR query integration
+  // setupRouterSsrQueryIntegration({ router, queryClient: rqContext.queryClient })
 
   return router
 }

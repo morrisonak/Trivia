@@ -11,5 +11,20 @@
       "database_id": "a72ebdc7-c3a5-4878-9892-89f7ac43aa7a",
       "preview_database_id": "a72ebdc7-c3a5-4878-9892-89f7ac43aa7a"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOM",
+        "class_name": "GameRoom",
+        "script_name": "trivia-app"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GameRoom"]
+    }
   ]
 }
