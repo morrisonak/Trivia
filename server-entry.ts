@@ -1,10 +1,12 @@
 // Custom server entry for Cloudflare Workers
 // This wraps the TanStack Start handler and exposes Cloudflare bindings properly
 
+import type { Env } from 'cloudflare:workers'
+
 export { GameRoom } from './src/durable-objects/GameRoom'
 
 export default {
-  async fetch(request: Request, env: any, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url)
 
     // Handle WebSocket upgrade requests for game rooms

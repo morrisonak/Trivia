@@ -1,9 +1,11 @@
 import { DurableObject } from "cloudflare:workers"
+import type { Env } from 'cloudflare:workers'
 
 interface Player {
   id: string
   name: string
   isHost: boolean
+  isDisplay: boolean
   score: number
   ws: WebSocket | null
 }
@@ -38,14 +40,15 @@ interface GameState {
   answers: Answer[]
   currentQuestionAnswers: Set<string>
   timer: number | null
+  nextGameRoomCode: string | null
 }
 
 export class GameRoom extends DurableObject {
   private state: GameState
-  private timerInterval: number | null = null
+  private timerInterval: ReturnType<typeof setInterval> | null = null
 
-  constructor(ctx: DurableObjectState, env: any) {
-    super(ctx, env)
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env)
 
     this.state = {
       roomCode: '',
@@ -57,7 +60,8 @@ export class GameRoom extends DurableObject {
       questions: [],
       answers: [],
       currentQuestionAnswers: new Set(),
-      timer: null
+      timer: null,
+      nextGameRoomCode: null
     }
   }
 
@@ -103,6 +107,14 @@ export class GameRoom extends DurableObject {
       })
     }
 
+    if (path.includes('/next-game')) {
+      return this.handleGetNextGame()
+    }
+
+    if (path.includes('/set-next-game')) {
+      return this.handleSetNextGame(request)
+    }
+
     return new Response('Not found', { status: 404 })
   }
 
@@ -116,36 +128,39 @@ export class GameRoom extends DurableObject {
     }
 
     const player = this.state.players.get(playerId)
-    if (player) {
-      player.ws = ws
-      this.broadcastState()
+    if (!player) {
+      ws.close(1008, 'Player not found')
+      return
+    }
 
-      // If game is in progress, send current question to newly connected player
-      if (this.state.status === 'playing' && this.state.currentQuestionIndex < this.state.questions.length) {
-        const question = this.state.questions[this.state.currentQuestionIndex]
-        ws.send(JSON.stringify({
-          type: 'question',
-          data: {
-            questionNumber: this.state.currentQuestionIndex + 1,
-            totalQuestions: this.state.questions.length,
-            question: {
-              id: question.id,
-              text: question.text,
-              optionA: question.optionA,
-              optionB: question.optionB,
-              optionC: question.optionC,
-              optionD: question.optionD
-            }
+    player.ws = ws
+    this.broadcastState()
+
+    // If game is in progress, send current question to newly connected player
+    if (this.state.status === 'playing' && this.state.currentQuestionIndex < this.state.questions.length) {
+      const question = this.state.questions[this.state.currentQuestionIndex]
+      ws.send(JSON.stringify({
+        type: 'question',
+        data: {
+          questionNumber: this.state.currentQuestionIndex + 1,
+          totalQuestions: this.state.questions.length,
+          question: {
+            id: question.id,
+            text: question.text,
+            optionA: question.optionA,
+            optionB: question.optionB,
+            optionC: question.optionC,
+            optionD: question.optionD
           }
-        }))
-
-        // Also send current timer state
-        if (this.state.timer !== null) {
-          ws.send(JSON.stringify({
-            type: 'timer',
-            data: { timeRemaining: this.state.timer }
-          }))
         }
+      }))
+
+      // Also send current timer state
+      if (this.state.timer !== null) {
+        ws.send(JSON.stringify({
+          type: 'timer',
+          data: { timeRemaining: this.state.timer }
+        }))
       }
     }
   }
@@ -169,9 +184,9 @@ export class GameRoom extends DurableObject {
     }
   }
 
-  webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+  webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean) {
     // Remove websocket reference from player
-    for (const [playerId, player] of this.state.players.entries()) {
+    for (const player of this.state.players.values()) {
       if (player.ws === ws) {
         player.ws = null
       }
@@ -179,7 +194,8 @@ export class GameRoom extends DurableObject {
   }
 
   private async handleInit(request: Request): Promise<Response> {
-    const { roomCode, hostName, questionCount, maxPlayers = 4 } = await request.json()
+    const data = await request.json() as { roomCode: string; hostName: string; questionCount: number; maxPlayers?: number }
+    const { roomCode, hostName, questionCount, maxPlayers = 4 } = data
 
     this.state.roomCode = roomCode
     this.state.questionCount = questionCount
@@ -190,6 +206,7 @@ export class GameRoom extends DurableObject {
       id: hostId,
       name: hostName,
       isHost: true,
+      isDisplay: false,
       score: 0,
       ws: null
     })
@@ -198,9 +215,16 @@ export class GameRoom extends DurableObject {
   }
 
   private async handleJoin(request: Request): Promise<Response> {
-    const { playerName } = await request.json()
+    const data = await request.json() as { playerName: string; isDisplay?: boolean }
+    const { playerName, isDisplay = false } = data
 
-    if (this.state.status !== 'lobby') {
+    // Check if room has been initialized
+    if (!this.state.roomCode) {
+      return Response.json({ error: 'Room not found' }, { status: 404 })
+    }
+
+    // Allow displays to join at any time, but restrict regular players
+    if (this.state.status !== 'lobby' && !isDisplay) {
       return Response.json({ error: 'Game already started' }, { status: 400 })
     }
 
@@ -209,6 +233,7 @@ export class GameRoom extends DurableObject {
       id: playerId,
       name: playerName,
       isHost: false,
+      isDisplay,
       score: 0,
       ws: null
     })
@@ -219,14 +244,17 @@ export class GameRoom extends DurableObject {
   }
 
   private async handleStart(request: Request): Promise<Response> {
-    const { playerId } = await request.json()
+    const data = await request.json() as { playerId: string }
+    const { playerId } = data
 
     const player = this.state.players.get(playerId)
     if (!player?.isHost) {
       return Response.json({ error: 'Only host can start' }, { status: 403 })
     }
 
-    if (this.state.players.size < 2) {
+    // Count only non-display players
+    const actualPlayers = Array.from(this.state.players.values()).filter(p => !p.isDisplay)
+    if (actualPlayers.length < 2) {
       return Response.json({ error: 'Need at least 2 players' }, { status: 400 })
     }
 
@@ -247,13 +275,16 @@ export class GameRoom extends DurableObject {
     return Response.json({ success: true })
   }
 
-  private async handleGetState(request: Request): Promise<Response> {
-    const players = Array.from(this.state.players.values()).map(p => ({
-      id: p.id,
-      name: p.name,
-      isHost: p.isHost,
-      score: p.score
-    }))
+  private async handleGetState(_request: Request): Promise<Response> {
+    // Only return non-display players to clients
+    const players = Array.from(this.state.players.values())
+      .filter(p => !p.isDisplay)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        isHost: p.isHost,
+        score: p.score
+      }))
 
     return Response.json({
       roomCode: this.state.roomCode,
@@ -1424,8 +1455,9 @@ export class GameRoom extends DurableObject {
         data: { timeRemaining: this.state.timer }
       })
 
-      // Check if all players have answered
-      if (this.state.answers.size === this.state.players.size) {
+      // Check if all non-display players have answered
+      const actualPlayerCount = Array.from(this.state.players.values()).filter(p => !p.isDisplay).length
+      if (this.state.currentQuestionAnswers.size === actualPlayerCount) {
         this.endQuestion()
       }
     }, 1000)
@@ -1450,8 +1482,9 @@ export class GameRoom extends DurableObject {
 
     this.state.currentQuestionAnswers.add(playerId)
 
-    // Check if all players have answered
-    if (this.state.currentQuestionAnswers.size === this.state.players.size) {
+    // Check if all non-display players have answered
+    const actualPlayerCount = Array.from(this.state.players.values()).filter(p => !p.isDisplay).length
+    if (this.state.currentQuestionAnswers.size === actualPlayerCount) {
       this.endQuestion()
     }
   }
@@ -1524,21 +1557,23 @@ export class GameRoom extends DurableObject {
   }
 
   private handleGetResults() {
-    // Calculate player statistics
-    const playersWithStats = Array.from(this.state.players.values()).map(player => {
-      const playerAnswers = this.state.answers.filter(a => a.playerId === player.id)
-      const correctAnswers = playerAnswers.filter(a => a.isCorrect).length
-      const totalAnswers = playerAnswers.length
+    // Calculate player statistics (exclude displays)
+    const playersWithStats = Array.from(this.state.players.values())
+      .filter(player => !player.isDisplay)
+      .map(player => {
+        const playerAnswers = this.state.answers.filter(a => a.playerId === player.id)
+        const correctAnswers = playerAnswers.filter(a => a.isCorrect).length
+        const totalAnswers = playerAnswers.length
 
-      return {
-        id: player.id,
-        name: player.name,
-        score: player.score,
-        correctAnswers,
-        totalAnswers,
-        accuracy: totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0
-      }
-    }).sort((a, b) => b.score - a.score)
+        return {
+          id: player.id,
+          name: player.name,
+          score: player.score,
+          correctAnswers,
+          totalAnswers,
+          accuracy: totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0
+        }
+      }).sort((a, b) => b.score - a.score)
 
     // Calculate game statistics
     const scores = playersWithStats.map(p => p.score)
@@ -1558,12 +1593,15 @@ export class GameRoom extends DurableObject {
   }
 
   private broadcastState() {
-    const players = Array.from(this.state.players.values()).map(p => ({
-      id: p.id,
-      name: p.name,
-      isHost: p.isHost,
-      score: p.score
-    }))
+    // Only broadcast non-display players
+    const players = Array.from(this.state.players.values())
+      .filter(p => !p.isDisplay)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        isHost: p.isHost,
+        score: p.score
+      }))
 
     this.broadcast({
       type: 'state',
@@ -1573,5 +1611,20 @@ export class GameRoom extends DurableObject {
         questionCount: this.state.questionCount
       }
     })
+  }
+
+  private handleGetNextGame(): Response {
+    return Response.json({
+      newRoomCode: this.state.nextGameRoomCode
+    })
+  }
+
+  private async handleSetNextGame(request: Request): Promise<Response> {
+    const data = await request.json() as { newRoomCode: string }
+    const { newRoomCode } = data
+
+    this.state.nextGameRoomCode = newRoomCode
+
+    return Response.json({ success: true })
   }
 }

@@ -36,6 +36,8 @@
     "drizzle-kit": "^0.30.0",
     "drizzle-orm": "^0.39.0",
     "lucide-react": "^0.544.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.0.2",
@@ -45,7 +47,7 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251111.0",
+    "@cloudflare/workers-types": "^4.20251113.0",
     "@tanstack/devtools-vite": "^0.3.11",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.2.0",

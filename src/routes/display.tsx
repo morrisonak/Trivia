@@ -41,7 +41,6 @@ function DisplaySetup() {
       }
 
       // Store display info in session storage
-      sessionStorage.setItem('gameId', data.game.id)
       sessionStorage.setItem('playerId', data.player.id)
       sessionStorage.setItem('isDisplay', 'true')
       sessionStorage.setItem('roomCode', data.game.roomCode)

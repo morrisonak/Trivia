@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Trophy, Medal, Award, Star, Home, RotateCcw, Loader2 } from 'lucide-react'
 import { getRankEmoji } from '@/lib/scoring'
 
@@ -34,9 +34,13 @@ function GameResults() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [creatingGame, setCreatingGame] = useState(false)
+  const [waitingForHost, setWaitingForHost] = useState(false)
+  const isCreatingRef = useRef(false)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const playerId = sessionStorage.getItem('playerId')
   const playerName = sessionStorage.getItem('playerName')
+  const isHost = sessionStorage.getItem('isHost') === 'true'
 
   useEffect(() => {
     if (!playerId || !playerName) {
@@ -45,6 +49,13 @@ function GameResults() {
     }
 
     fetchResults()
+
+    // Cleanup polling on unmount
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+    }
   }, [roomCode])
 
   const fetchResults = async () => {
@@ -62,9 +73,10 @@ function GameResults() {
     }
   }
 
-  const playAgain = async () => {
-    if (!playerName || creatingGame) return
+  const playAgainAsHost = async () => {
+    if (!playerName || creatingGame || isCreatingRef.current) return
 
+    isCreatingRef.current = true
     setCreatingGame(true)
     setError('')
 
@@ -76,6 +88,7 @@ function GameResults() {
           playerName: playerName.trim(),
           maxPlayers: 4,
           questionCount: 10,
+          previousRoomCode: roomCode, // Include previous room code for auto-join
         }),
       })
 
@@ -95,10 +108,59 @@ function GameResults() {
         to: '/game/$roomCode',
         params: { roomCode: data.game.roomCode },
       })
+      // Don't reset isCreatingRef since we're navigating away
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create game')
       setCreatingGame(false)
+      isCreatingRef.current = false
     }
+  }
+
+  const waitForHostToCreateGame = () => {
+    setWaitingForHost(true)
+    setError('')
+
+    // Poll for new game room
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/games/${roomCode}/next-game`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.newRoomCode) {
+            // Stop polling
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current)
+            }
+
+            // Auto-join the new game
+            const joinResponse = await fetch(`/api/games/${data.newRoomCode}/join`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ playerName: playerName?.trim() }),
+            })
+
+            const joinData = await joinResponse.json()
+
+            if (!joinResponse.ok) {
+              throw new Error(joinData.error || 'Failed to join new game')
+            }
+
+            // Store new game info
+            sessionStorage.setItem('playerId', joinData.playerId)
+            sessionStorage.setItem('playerName', playerName!)
+            sessionStorage.setItem('isHost', 'false')
+
+            // Navigate to new game
+            navigate({
+              to: '/game/$roomCode',
+              params: { roomCode: data.newRoomCode },
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Error polling for new game:', err)
+      }
+    }, 2000) // Poll every 2 seconds
   }
 
   const goHome = () => {
@@ -273,26 +335,46 @@ function GameResults() {
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button
-            onClick={playAgain}
-            disabled={creatingGame}
-            className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 [@media(hover:hover)]:hover:from-green-600 [@media(hover:hover)]:hover:to-emerald-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold rounded-full shadow-lg transform transition [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {creatingGame ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Creating Game...
-              </>
-            ) : (
-              <>
-                <RotateCcw className="w-5 h-5" />
-                Play Again
-              </>
-            )}
-          </button>
+          {isHost ? (
+            <button
+              onClick={playAgainAsHost}
+              disabled={creatingGame}
+              className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 [@media(hover:hover)]:hover:from-green-600 [@media(hover:hover)]:hover:to-emerald-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold rounded-full shadow-lg transform transition [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {creatingGame ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Creating Game...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-5 h-5" />
+                  Play Again (Host)
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={waitForHostToCreateGame}
+              disabled={waitingForHost}
+              className="px-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 [@media(hover:hover)]:hover:from-blue-600 [@media(hover:hover)]:hover:to-cyan-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold rounded-full shadow-lg transform transition [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {waitingForHost ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Waiting for host...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-5 h-5" />
+                  Ready to Play Again
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={goHome}
-            disabled={creatingGame}
+            disabled={creatingGame || waitingForHost}
             className="px-8 py-3 bg-white/10 [@media(hover:hover)]:hover:bg-white/20 text-white font-bold rounded-full shadow-lg transform transition [@media(hover:hover)]:hover:scale-105 border border-white/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Home className="w-5 h-5" />

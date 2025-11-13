@@ -15,7 +15,7 @@ export const Route = createFileRoute('/api/games/join')({
         }
 
         try {
-          const { roomCode, playerName } = await request.json()
+          const { roomCode, playerName, isDisplay } = await request.json()
 
           if (!roomCode || !playerName) {
             return Response.json(
@@ -33,7 +33,7 @@ export const Route = createFileRoute('/api/games/join')({
             new Request(`https://fake-host/join`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ playerName }),
+              body: JSON.stringify({ playerName, isDisplay: isDisplay || false }),
             })
           )
 

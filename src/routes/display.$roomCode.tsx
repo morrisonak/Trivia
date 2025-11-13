@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Monitor,
   Users,
@@ -18,12 +18,11 @@ export const Route = createFileRoute('/display/$roomCode')({
 })
 
 interface Player {
-  id: number
+  id: string
   name: string
   score: number
   isHost: boolean
   hasAnswered?: boolean
-  lastAnswerCorrect?: boolean
 }
 
 interface Question {
@@ -36,7 +35,7 @@ interface Question {
 }
 
 interface DisplayState {
-  status: 'lobby' | 'playing' | 'results' | 'showing-answer'
+  status: 'lobby' | 'playing' | 'results' | 'finished'
   players: Player[]
   currentQuestion: Question | null
   questionNumber: number
@@ -45,11 +44,13 @@ interface DisplayState {
   correctAnswer: string | null
   commentary: string | null
   winner: Player | null
+  showResults: boolean
 }
 
 function BigBoardDisplay() {
   const { roomCode } = Route.useParams()
   const navigate = useNavigate()
+  const wsRef = useRef<WebSocket | null>(null)
   const [displayState, setDisplayState] = useState<DisplayState>({
     status: 'lobby',
     players: [],
@@ -60,45 +61,136 @@ function BigBoardDisplay() {
     correctAnswer: null,
     commentary: null,
     winner: null,
+    showResults: false,
   })
   const [loading, setLoading] = useState(true)
+  const [playerAnswerStatus, setPlayerAnswerStatus] = useState<Map<string, boolean>>(new Map())
 
   useEffect(() => {
     // Verify display session
     const isDisplay = sessionStorage.getItem('isDisplay')
-    if (!isDisplay) {
+    const playerId = sessionStorage.getItem('playerId')
+
+    if (!isDisplay || !playerId) {
       navigate({ to: '/display' })
       return
     }
 
-    // Initial fetch
-    fetchGameState()
+    // Connect to WebSocket
+    connectWebSocket(playerId)
 
-    // Poll for updates (will be replaced with WebSockets)
-    const interval = setInterval(fetchGameState, 1000)
-
-    return () => clearInterval(interval)
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+    }
   }, [roomCode])
 
-  const fetchGameState = async () => {
-    try {
-      // For now, fetch basic game state
-      // This will be enhanced with real-time WebSocket updates
-      const response = await fetch(`/api/games/${roomCode}`)
-      if (!response.ok) {
-        throw new Error('Failed to fetch game state')
-      }
-      const data = await response.json()
+  const connectWebSocket = (playerId: string) => {
+    console.log('Connecting display to WebSocket for room:', roomCode)
 
-      setDisplayState((prev) => ({
-        ...prev,
-        status: data.status === 'finished' ? 'results' : data.status,
-        players: data.players || [],
-      }))
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/api/games/${roomCode}/ws?playerId=${playerId}`
+
+    const ws = new WebSocket(wsUrl)
+
+    ws.onopen = () => {
+      console.log('Display WebSocket connected')
       setLoading(false)
-    } catch (err) {
-      console.error('Failed to fetch display state:', err)
     }
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data)
+        console.log('Display received WebSocket message:', message)
+
+        switch (message.type) {
+          case 'state':
+            // Update lobby state
+            setDisplayState(prev => ({
+              ...prev,
+              status: message.data.status,
+              players: message.data.players || [],
+              totalQuestions: message.data.questionCount || 10,
+            }))
+            break
+
+          case 'game_started':
+            setDisplayState(prev => ({
+              ...prev,
+              status: 'playing',
+            }))
+            break
+
+          case 'question':
+            // New question - reset answer tracking
+            setPlayerAnswerStatus(new Map())
+            setDisplayState(prev => ({
+              ...prev,
+              status: 'playing',
+              currentQuestion: message.data.question,
+              questionNumber: message.data.questionNumber,
+              totalQuestions: message.data.totalQuestions,
+              timeRemaining: 15,
+              correctAnswer: null,
+              commentary: null,
+              showResults: false,
+            }))
+            break
+
+          case 'timer':
+            setDisplayState(prev => ({
+              ...prev,
+              timeRemaining: message.data.timeRemaining
+            }))
+            break
+
+          case 'results':
+            // Show answer results
+            const updatedPlayers = message.data.players || displayState.players
+            setDisplayState(prev => ({
+              ...prev,
+              correctAnswer: message.data.correctAnswer,
+              commentary: message.data.commentary,
+              players: updatedPlayers,
+              showResults: true,
+            }))
+            break
+
+          case 'game_ended':
+            // Game finished
+            const finalPlayers = message.data.players || displayState.players
+            const sortedPlayers = [...finalPlayers].sort((a, b) => b.score - a.score)
+            setDisplayState(prev => ({
+              ...prev,
+              status: 'results',
+              players: sortedPlayers,
+              winner: sortedPlayers[0] || null,
+            }))
+            break
+        }
+      } catch (err) {
+        console.error('Failed to parse display WebSocket message:', err)
+      }
+    }
+
+    ws.onerror = (error) => {
+      console.error('Display WebSocket error:', error)
+      setLoading(false)
+    }
+
+    ws.onclose = () => {
+      console.log('Display WebSocket disconnected')
+      // Attempt to reconnect after 2 seconds
+      setTimeout(() => {
+        const playerId = sessionStorage.getItem('playerId')
+        if (playerId) {
+          connectWebSocket(playerId)
+        }
+      }, 2000)
+    }
+
+    wsRef.current = ws
   }
 
   const renderLobby = () => (
