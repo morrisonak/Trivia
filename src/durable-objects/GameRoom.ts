@@ -31,6 +31,7 @@ interface GameState {
   roomCode: string
   status: 'lobby' | 'playing' | 'finished'
   players: Map<string, Player>
+  maxPlayers: number
   questionCount: number
   currentQuestionIndex: number
   questions: Question[]
@@ -50,6 +51,7 @@ export class GameRoom extends DurableObject {
       roomCode: '',
       status: 'lobby',
       players: new Map(),
+      maxPlayers: 4,
       questionCount: 10,
       currentQuestionIndex: 0,
       questions: [],
@@ -177,10 +179,11 @@ export class GameRoom extends DurableObject {
   }
 
   private async handleInit(request: Request): Promise<Response> {
-    const { roomCode, hostName, questionCount } = await request.json()
+    const { roomCode, hostName, questionCount, maxPlayers = 4 } = await request.json()
 
     this.state.roomCode = roomCode
     this.state.questionCount = questionCount
+    this.state.maxPlayers = maxPlayers
 
     const hostId = crypto.randomUUID()
     this.state.players.set(hostId, {
@@ -256,6 +259,7 @@ export class GameRoom extends DurableObject {
       roomCode: this.state.roomCode,
       status: this.state.status,
       players,
+      maxPlayers: this.state.maxPlayers,
       questionCount: this.state.questionCount
     })
   }

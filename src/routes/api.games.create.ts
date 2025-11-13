@@ -16,7 +16,7 @@ export const Route = createFileRoute('/api/games/create')({
         }
 
         try {
-          const { playerName, questionCount = 10 } = await request.json()
+          const { playerName, questionCount = 10, maxPlayers = 4 } = await request.json()
 
           if (!playerName) {
             return Response.json(
@@ -41,6 +41,7 @@ export const Route = createFileRoute('/api/games/create')({
                 roomCode,
                 hostName: playerName,
                 questionCount,
+                maxPlayers,
               }),
             })
           )
