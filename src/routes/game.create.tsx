@@ -130,7 +130,7 @@ function CreateGame() {
                         : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
                     }`}
                   >
-                    {num} Questions
+                    {num}
                   </button>
                 ))}
               </div>
