@@ -1,69 +1,42 @@
-# Trivia App
+# Trivia Nights
 
-A full-stack trivia application built with TanStack Start and deployed on Cloudflare Workers.
+A real-time multiplayer trivia game where players compete head-to-head with timed questions, speed-based scoring, and live leaderboards. Built for parties, game nights, and casual fun.
+
+**Live App**: https://trivia-app.jmorrison.workers.dev
+
+## Features
+
+- **Real-time multiplayer** — Create or join game rooms with 4-character room codes
+- **Timed questions** — 15 seconds per question with speed-based scoring
+- **Streak bonuses** — Earn extra points for consecutive correct answers
+- **Big Board display** — Connect a TV or monitor as a spectator display for parties
+- **Play Again** — Seamlessly start a new game with the same group
+- **Mobile-friendly** — Touch-optimized interface with responsive layouts
+
+## How It Works
+
+1. **Host creates a game** — Chooses player count and number of questions
+2. **Players join** — Enter the room code and a display name
+3. **Host starts** — Game begins when everyone is ready
+4. **Answer questions** — Timed multiple choice with instant feedback and commentary
+5. **See results** — Final rankings with scores, accuracy, and streaks
 
 ## Tech Stack
 
-- **Framework**: [TanStack Start](https://tanstack.com/start) - Full-stack React framework
-- **Runtime**: [Cloudflare Workers](https://workers.cloudflare.com/) - Serverless edge runtime
-- **Database**: [Cloudflare D1](https://developers.cloudflare.com/d1/) - Serverless SQLite database
-- **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - TypeScript ORM
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) v4
-- **UI Components**: [Shadcn UI](https://ui.shadcn.com/)
-- **State Management**: [TanStack Query](https://tanstack.com/query)
-- **Forms**: [TanStack Form](https://tanstack.com/form)
-
-## Project Architecture
-
-### Database Setup
-
-This project uses **Cloudflare D1**, a serverless SQLite database that runs at the edge. The database is accessed via Drizzle ORM for type-safe queries.
-
-#### Key Files:
-- `src/db/schema.ts` - Database schema definitions
-- `src/db/index.ts` - Database client factory
-- `drizzle.config.ts` - Drizzle configuration
-- `server-entry.ts` - Custom Cloudflare Workers entry point that exposes D1 bindings
-
-#### Accessing D1 in API Routes:
-```typescript
-// API routes can access D1 via request.env.DB
-export const Route = createFileRoute('/api/todos')({
-  server: {
-    handlers: {
-      GET: async ({ request }) => {
-        const env = request.env
-        const db = createDb(env.DB)
-        // Use db for queries...
-      }
-    }
-  }
-})
-```
-
-### Custom Server Entry
-
-The project uses a custom `server-entry.ts` that wraps TanStack Start's default handler to properly expose Cloudflare bindings:
-
-```typescript
-export default {
-  async fetch(request: Request, env: any, ctx: ExecutionContext) {
-    const { default: handler } = await import('@tanstack/react-start/server-entry')
-    request.env = env // Inject env into request
-    return handler.fetch(request, env, ctx)
-  }
-}
-```
-
-This allows API routes to access `request.env.DB` for D1 database access.
+- [TanStack Start](https://tanstack.com/start) — Full-stack React framework
+- [Cloudflare Workers](https://workers.cloudflare.com/) — Serverless edge runtime
+- [Cloudflare D1](https://developers.cloudflare.com/d1/) — Serverless SQLite database
+- [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/) — Real-time game state + WebSockets
+- [Drizzle ORM](https://orm.drizzle.team/) — Type-safe database queries
+- [Tailwind CSS](https://tailwindcss.com/) v4 + [Shadcn UI](https://ui.shadcn.com/)
+- React 19, TanStack Query, Vite
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ or Bun
-- Cloudflare account
-- Wrangler CLI (installed as dev dependency)
+- Node.js 18+
+- Cloudflare account with Wrangler CLI access
 
 ### Installation
 
@@ -71,259 +44,91 @@ This allows API routes to access `request.env.DB` for D1 database access.
 npm install
 ```
 
-### Environment Setup
-
-1. Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-
-2. The D1 database is configured via `wrangler.jsonc` - no environment variables needed for local development.
-
 ### Database Setup
 
-1. **Create D1 Database** (if not exists):
+1. Create the D1 database (if starting fresh):
 ```bash
 npx wrangler d1 create trivia-db
 ```
 
-2. **Generate Migration**:
-```bash
-npm run db:generate
-```
-
-3. **Apply Migration to Local Database**:
-```bash
-npx wrangler d1 execute trivia-db --local --file=./drizzle/0000_*.sql
-```
-
-4. **Apply Migration to Production Database**:
+2. Apply migrations:
 ```bash
 npx wrangler d1 execute trivia-db --remote --file=./drizzle/0000_*.sql
 ```
 
-### Development
+3. Seed the question bank:
+```bash
+# Hit the seed endpoint after starting the dev server
+curl -X POST http://localhost:3003/api/seed
+```
 
-Run the development server (connects to production D1 database):
+### Development
 
 ```bash
 npm run dev
 ```
 
-The app will be available at `http://localhost:3003`
+The app runs at `http://localhost:3003`. Dev mode uses `--remote` to connect to the production D1 database.
 
-**Note**: The dev server uses `wrangler dev --remote` which connects to the production D1 database. This keeps local and production data in sync.
-
-### Building for Production
+### Deploy
 
 ```bash
-npm run build
+npm run build && npm run deploy
 ```
 
-### Deployment
+## Architecture
 
-Deploy to Cloudflare Workers:
+The app uses two complementary Cloudflare storage layers:
 
-```bash
-npm run deploy
-```
+- **D1** — Persistent data: questions, game records, player answers, scores
+- **Durable Objects** — Real-time ephemeral state: WebSocket connections, timers, live game orchestration
 
-The app will be deployed to: `https://trivia-app.jmorrison.workers.dev`
+During lobby phase, clients poll for state updates. Once the game starts, all communication switches to WebSockets through the GameRoom Durable Object for instant question delivery, timer sync, and result broadcasting.
 
-## Database Management
+### Scoring
 
-### Generate Schema Changes
-```bash
-npm run db:generate
-```
-
-### Apply Migrations
-```bash
-# Local database
-npx wrangler d1 execute trivia-db --local --file=./drizzle/0000_*.sql
-
-# Production database
-npx wrangler d1 execute trivia-db --remote --file=./drizzle/0000_*.sql
-```
-
-### Drizzle Studio (Visual Database Editor)
-```bash
-npm run db:studio
-```
-
-### Direct SQL Queries
-```bash
-# Query local database
-npx wrangler d1 execute trivia-db --local --command="SELECT * FROM todos"
-
-# Query production database
-npx wrangler d1 execute trivia-db --remote --command="SELECT * FROM todos"
-```
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are defined as files in `src/routes/`.
-
-### Adding a Route
-
-Create a new file in `./src/routes/`:
-- `src/routes/about.tsx` → `/about`
-- `src/routes/demo/drizzle.tsx` → `/demo/drizzle`
-
-### API Routes
-
-API routes follow the same file-based pattern with a special server handler:
-
-```typescript
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/api/example')({
-  server: {
-    handlers: {
-      GET: async ({ request }) => {
-        const env = request.env
-        // Access D1: const db = createDb(env.DB)
-        return Response.json({ message: 'Hello' })
-      },
-      POST: async ({ request }) => {
-        const body = await request.json()
-        return Response.json({ success: true })
-      }
-    }
-  }
-})
-```
-
-### Using Links
-
-```tsx
-import { Link } from "@tanstack/react-router"
-
-<Link to="/about">About</Link>
-```
-
-## Styling
-
-This project uses **Tailwind CSS v4** with the Vite plugin.
-
-### Adding Shadcn Components
-
-```bash
-npx shadcn@latest add button
-npx shadcn@latest add card
-npx shadcn@latest add input
-```
-
-Components are added to `src/components/ui/`.
-
-## Data Fetching
-
-### Option 1: Route Loaders (Server-Side)
-
-```tsx
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch("https://api.example.com/people")
-    return response.json()
-  },
-  component: () => {
-    const data = Route.useLoaderData()
-    return <ul>{data.map(item => <li>{item.name}</li>)}</ul>
-  }
-})
-```
-
-### Option 2: TanStack Query (Client-Side)
-
-```tsx
-import { useQuery } from "@tanstack/react-query"
-
-function MyComponent() {
-  const { data } = useQuery({
-    queryKey: ["todos"],
-    queryFn: () => fetch('/api/todos').then(res => res.json())
-  })
-
-  return <div>{/* render data */}</div>
-}
-```
-
-## Testing
-
-```bash
-npm run test
-```
-
-This project uses [Vitest](https://vitest.dev/) for testing.
+| Component | Points |
+|-----------|--------|
+| Correct answer | 100 base |
+| Speed bonus | +10 per second remaining |
+| Streak bonus | +50 for 3+ correct in a row |
 
 ## Project Structure
 
 ```
-├── src/
-│   ├── routes/           # File-based routes
-│   │   ├── __root.tsx    # Root layout
-│   │   ├── index.tsx     # Home page
-│   │   └── demo/         # Demo routes
-│   ├── db/               # Database schema and client
-│   │   ├── schema.ts     # Drizzle schema
-│   │   └── index.ts      # DB client factory
-│   ├── components/       # React components
-│   │   └── ui/           # Shadcn UI components
-│   └── lib/              # Utilities
-├── drizzle/              # Database migrations
-├── public/               # Static assets
-├── server-entry.ts       # Custom Cloudflare Workers entry
-├── wrangler.jsonc        # Cloudflare Workers config
-├── drizzle.config.ts     # Drizzle ORM config
-└── vite.config.ts        # Vite config
+src/
+├── routes/                     # File-based routing (TanStack Router)
+│   ├── game.create.tsx         # Create game form
+│   ├── game.join.tsx           # Join by room code
+│   ├── game.$roomCode.tsx      # Game lobby
+│   ├── game.$roomCode.play.tsx # Live gameplay (WebSocket)
+│   ├── game.$roomCode.results.tsx # Final results
+│   ├── display.$roomCode.tsx   # Big Board display
+│   └── api.games.*.ts          # Game API routes
+├── durable-objects/
+│   └── GameRoom.ts             # Real-time game orchestration
+├── db/
+│   └── schema.ts               # 5-table schema (questions, games, players, answers)
+└── lib/
+    ├── scoring.ts              # Points calculation
+    └── room-codes.ts           # Room code generation
 ```
 
-## Key Configuration Files
+## Scripts
 
-### wrangler.jsonc
-Configures Cloudflare Workers deployment and D1 database bindings:
-```json
-{
-  "main": "./server-entry.ts",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "trivia-db",
-      "database_id": "your-database-id"
-    }
-  ]
-}
-```
-
-### vite.config.ts
-Includes Cloudflare Vite plugin for local development:
-```typescript
-import { cloudflare } from '@cloudflare/vite-plugin'
-
-export default defineConfig({
-  plugins: [
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    tanstackStart(),
-    // ...
-  ]
-})
-```
-
-## Demo Files
-
-Files prefixed with `demo` are example implementations and can be safely deleted:
-- `src/routes/demo/drizzle.tsx` - D1 database demo
-- `src/routes/demo/form.tsx` - TanStack Form demo
-- `src/routes/demo/punk-songs.tsx` - API fetching demo
-
-## Production URL
-
-**Live App**: https://trivia-app.jmorrison.workers.dev
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server (port 3003, remote D1) |
+| `npm run build` | Production build |
+| `npm run deploy` | Deploy to Cloudflare Workers |
+| `npm run test` | Run Vitest test suite |
+| `npm run db:generate` | Generate Drizzle migrations |
+| `npm run db:studio` | Open Drizzle Studio GUI |
 
 ## Learn More
 
-- [TanStack Start Documentation](https://tanstack.com/start)
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-- [Cloudflare D1 Documentation](https://developers.cloudflare.com/d1/)
-- [Drizzle ORM Documentation](https://orm.drizzle.team/)
-- [TanStack Router Documentation](https://tanstack.com/router)
+- [TanStack Start](https://tanstack.com/start)
+- [Cloudflare Workers](https://developers.cloudflare.com/workers/)
+- [Cloudflare D1](https://developers.cloudflare.com/d1/)
+- [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/)
+- [Drizzle ORM](https://orm.drizzle.team/)
