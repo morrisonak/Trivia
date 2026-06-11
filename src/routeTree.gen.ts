@@ -24,7 +24,6 @@ import { Route as ApiGamesRoomCodeRouteImport } from './routes/api.games.$roomCo
 import { Route as ApiGamesRoomCodeStartRouteImport } from './routes/api.games.$roomCode.start'
 import { Route as ApiGamesRoomCodeResultsRouteImport } from './routes/api.games.$roomCode.results'
 import { Route as ApiGamesRoomCodeQuestionRouteImport } from './routes/api.games.$roomCode.question'
-import { Route as ApiGamesRoomCodeNextGameRouteImport } from './routes/api.games.$roomCode.next-game'
 import { Route as ApiGamesRoomCodeAnswerRouteImport } from './routes/api.games.$roomCode.answer'
 
 const DisplayRoute = DisplayRouteImport.update({
@@ -103,12 +102,6 @@ const ApiGamesRoomCodeQuestionRoute =
     path: '/question',
     getParentRoute: () => ApiGamesRoomCodeRoute,
   } as any)
-const ApiGamesRoomCodeNextGameRoute =
-  ApiGamesRoomCodeNextGameRouteImport.update({
-    id: '/next-game',
-    path: '/next-game',
-    getParentRoute: () => ApiGamesRoomCodeRoute,
-  } as any)
 const ApiGamesRoomCodeAnswerRoute = ApiGamesRoomCodeAnswerRouteImport.update({
   id: '/answer',
   path: '/answer',
@@ -129,7 +122,6 @@ export interface FileRoutesByFullPath {
   '/game/$roomCode/play': typeof GameRoomCodePlayRoute
   '/game/$roomCode/results': typeof GameRoomCodeResultsRoute
   '/api/games/$roomCode/answer': typeof ApiGamesRoomCodeAnswerRoute
-  '/api/games/$roomCode/next-game': typeof ApiGamesRoomCodeNextGameRoute
   '/api/games/$roomCode/question': typeof ApiGamesRoomCodeQuestionRoute
   '/api/games/$roomCode/results': typeof ApiGamesRoomCodeResultsRoute
   '/api/games/$roomCode/start': typeof ApiGamesRoomCodeStartRoute
@@ -148,7 +140,6 @@ export interface FileRoutesByTo {
   '/game/$roomCode/play': typeof GameRoomCodePlayRoute
   '/game/$roomCode/results': typeof GameRoomCodeResultsRoute
   '/api/games/$roomCode/answer': typeof ApiGamesRoomCodeAnswerRoute
-  '/api/games/$roomCode/next-game': typeof ApiGamesRoomCodeNextGameRoute
   '/api/games/$roomCode/question': typeof ApiGamesRoomCodeQuestionRoute
   '/api/games/$roomCode/results': typeof ApiGamesRoomCodeResultsRoute
   '/api/games/$roomCode/start': typeof ApiGamesRoomCodeStartRoute
@@ -168,7 +159,6 @@ export interface FileRoutesById {
   '/game/$roomCode/play': typeof GameRoomCodePlayRoute
   '/game/$roomCode/results': typeof GameRoomCodeResultsRoute
   '/api/games/$roomCode/answer': typeof ApiGamesRoomCodeAnswerRoute
-  '/api/games/$roomCode/next-game': typeof ApiGamesRoomCodeNextGameRoute
   '/api/games/$roomCode/question': typeof ApiGamesRoomCodeQuestionRoute
   '/api/games/$roomCode/results': typeof ApiGamesRoomCodeResultsRoute
   '/api/games/$roomCode/start': typeof ApiGamesRoomCodeStartRoute
@@ -189,7 +179,6 @@ export interface FileRouteTypes {
     | '/game/$roomCode/play'
     | '/game/$roomCode/results'
     | '/api/games/$roomCode/answer'
-    | '/api/games/$roomCode/next-game'
     | '/api/games/$roomCode/question'
     | '/api/games/$roomCode/results'
     | '/api/games/$roomCode/start'
@@ -208,7 +197,6 @@ export interface FileRouteTypes {
     | '/game/$roomCode/play'
     | '/game/$roomCode/results'
     | '/api/games/$roomCode/answer'
-    | '/api/games/$roomCode/next-game'
     | '/api/games/$roomCode/question'
     | '/api/games/$roomCode/results'
     | '/api/games/$roomCode/start'
@@ -227,7 +215,6 @@ export interface FileRouteTypes {
     | '/game/$roomCode/play'
     | '/game/$roomCode/results'
     | '/api/games/$roomCode/answer'
-    | '/api/games/$roomCode/next-game'
     | '/api/games/$roomCode/question'
     | '/api/games/$roomCode/results'
     | '/api/games/$roomCode/start'
@@ -352,13 +339,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGamesRoomCodeQuestionRouteImport
       parentRoute: typeof ApiGamesRoomCodeRoute
     }
-    '/api/games/$roomCode/next-game': {
-      id: '/api/games/$roomCode/next-game'
-      path: '/next-game'
-      fullPath: '/api/games/$roomCode/next-game'
-      preLoaderRoute: typeof ApiGamesRoomCodeNextGameRouteImport
-      parentRoute: typeof ApiGamesRoomCodeRoute
-    }
     '/api/games/$roomCode/answer': {
       id: '/api/games/$roomCode/answer'
       path: '/answer'
@@ -396,7 +376,6 @@ const GameRoomCodeRouteWithChildren = GameRoomCodeRoute._addFileChildren(
 
 interface ApiGamesRoomCodeRouteChildren {
   ApiGamesRoomCodeAnswerRoute: typeof ApiGamesRoomCodeAnswerRoute
-  ApiGamesRoomCodeNextGameRoute: typeof ApiGamesRoomCodeNextGameRoute
   ApiGamesRoomCodeQuestionRoute: typeof ApiGamesRoomCodeQuestionRoute
   ApiGamesRoomCodeResultsRoute: typeof ApiGamesRoomCodeResultsRoute
   ApiGamesRoomCodeStartRoute: typeof ApiGamesRoomCodeStartRoute
@@ -404,7 +383,6 @@ interface ApiGamesRoomCodeRouteChildren {
 
 const ApiGamesRoomCodeRouteChildren: ApiGamesRoomCodeRouteChildren = {
   ApiGamesRoomCodeAnswerRoute: ApiGamesRoomCodeAnswerRoute,
-  ApiGamesRoomCodeNextGameRoute: ApiGamesRoomCodeNextGameRoute,
   ApiGamesRoomCodeQuestionRoute: ApiGamesRoomCodeQuestionRoute,
   ApiGamesRoomCodeResultsRoute: ApiGamesRoomCodeResultsRoute,
   ApiGamesRoomCodeStartRoute: ApiGamesRoomCodeStartRoute,
