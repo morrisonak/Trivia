@@ -6,7 +6,6 @@ import {
   Timer,
   Trophy,
   CheckCircle,
-  XCircle,
   Loader2,
   Play,
   Crown,
@@ -37,6 +36,7 @@ interface Question {
 interface DisplayState {
   status: 'lobby' | 'playing' | 'results' | 'finished'
   players: Player[]
+  maxPlayers: number
   currentQuestion: Question | null
   questionNumber: number
   totalQuestions: number
@@ -54,6 +54,7 @@ function BigBoardDisplay() {
   const [displayState, setDisplayState] = useState<DisplayState>({
     status: 'lobby',
     players: [],
+    maxPlayers: 4,
     currentQuestion: null,
     questionNumber: 0,
     totalQuestions: 10,
@@ -65,6 +66,8 @@ function BigBoardDisplay() {
   })
   const [loading, setLoading] = useState(true)
   const [playerAnswerStatus, setPlayerAnswerStatus] = useState<Map<string, boolean>>(new Map())
+  const activeRef = useRef(true)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     // Verify display session
@@ -76,10 +79,16 @@ function BigBoardDisplay() {
       return
     }
 
+    activeRef.current = true
+
     // Connect to WebSocket
     connectWebSocket(playerId)
 
     return () => {
+      activeRef.current = false
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+      }
       if (wsRef.current) {
         wsRef.current.close()
       }
@@ -111,8 +120,17 @@ function BigBoardDisplay() {
               ...prev,
               status: message.data.status,
               players: message.data.players || [],
+              maxPlayers: message.data.maxPlayers || prev.maxPlayers,
               totalQuestions: message.data.questionCount || 10,
             }))
+            break
+
+          case 'player_answered':
+            setPlayerAnswerStatus(prev => {
+              const next = new Map(prev)
+              next.set(message.data.playerId, true)
+              return next
+            })
             break
 
           case 'game_started':
@@ -181,10 +199,11 @@ function BigBoardDisplay() {
 
     ws.onclose = () => {
       console.log('Display WebSocket disconnected')
-      // Attempt to reconnect after 2 seconds
-      setTimeout(() => {
+      // Attempt to reconnect after 2 seconds, but only while still mounted
+      if (!activeRef.current) return
+      reconnectTimerRef.current = setTimeout(() => {
         const playerId = sessionStorage.getItem('playerId')
-        if (playerId) {
+        if (activeRef.current && playerId) {
           connectWebSocket(playerId)
         }
       }, 2000)
@@ -209,7 +228,7 @@ function BigBoardDisplay() {
         <div className="flex items-center justify-center gap-3 mb-8">
           <Users className="w-10 h-10 text-yellow-400" />
           <h2 className="text-4xl font-bold text-white">
-            Players ({displayState.players.length}/4)
+            Players ({displayState.players.length}/{displayState.maxPlayers})
           </h2>
         </div>
 
@@ -235,7 +254,7 @@ function BigBoardDisplay() {
           ))}
 
           {/* Empty slots */}
-          {Array.from({ length: 4 - displayState.players.length }).map((_, i) => (
+          {Array.from({ length: Math.max(0, displayState.maxPlayers - displayState.players.length) }).map((_, i) => (
             <div
               key={`empty-${i}`}
               className="bg-white/5 rounded-xl p-6 border-2 border-white/10 border-dashed flex items-center justify-center"
@@ -336,7 +355,7 @@ function BigBoardDisplay() {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xl text-white">{player.name}</span>
-                  {player.hasAnswered ? (
+                  {playerAnswerStatus.get(player.id) ? (
                     <CheckCircle className="w-6 h-6 text-green-400" />
                   ) : (
                     <Loader2 className="w-6 h-6 text-yellow-400 animate-spin" />

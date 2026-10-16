@@ -9,14 +9,13 @@ export const Route = createFileRoute('/game/$roomCode')({
 })
 
 interface Player {
-  id: number
+  id: string
   name: string
   isHost: boolean
   score: number
 }
 
 interface GameState {
-  id: number
   roomCode: string
   status: 'lobby' | 'playing' | 'finished'
   maxPlayers: number
@@ -37,7 +36,6 @@ function GameLobby() {
 
   // Get player info from session storage - ONLY on client
   const [playerId, setPlayerId] = useState<string | null>(null)
-  const [playerName, setPlayerName] = useState<string | null>(null)
   const [isHost, setIsHost] = useState(false)
 
   useEffect(() => {
@@ -56,7 +54,6 @@ function GameLobby() {
     const storedIsHost = sessionStorage.getItem('isHost') === 'true'
 
     setPlayerId(storedPlayerId)
-    setPlayerName(storedPlayerName)
     setIsHost(storedIsHost)
 
     if (!storedPlayerId || !storedPlayerName) {
@@ -84,7 +81,7 @@ function GameLobby() {
       if (!response.ok) {
         throw new Error('Failed to fetch game state')
       }
-      const data = await response.json()
+      const data = await response.json() as GameState
       setGameState(data)
       setLoading(false)
 
@@ -131,7 +128,7 @@ function GameLobby() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data = await response.json() as { error?: string }
         throw new Error(data.error || 'Failed to start game')
       }
 
@@ -219,14 +216,14 @@ function GameLobby() {
                 <div
                   key={player.id}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
-                    player.id === Number(playerId)
+                    player.id === playerId
                       ? 'bg-yellow-400/20 border-yellow-400/50'
                       : 'bg-white/5 border-white/10'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-white font-medium">{player.name}</span>
-                    {player.id === Number(playerId) && (
+                    {player.id === playerId && (
                       <span className="text-xs bg-yellow-400/30 text-yellow-200 px-2 py-1 rounded">
                         You
                       </span>
@@ -239,7 +236,7 @@ function GameLobby() {
               ))}
 
               {/* Empty slots */}
-              {Array.from({ length: gameState.maxPlayers - gameState.players.length }).map(
+              {Array.from({ length: Math.max(0, gameState.maxPlayers - gameState.players.length) }).map(
                 (_, i) => (
                   <div
                     key={`empty-${i}`}

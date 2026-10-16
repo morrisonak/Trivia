@@ -5,7 +5,6 @@ export const Route = createFileRoute('/api/games/$roomCode/results')({
     handlers: {
       GET: async ({ request, params }) => {
         const { roomCode } = params
-        // @ts-expect-error - Cloudflare types
         const env = request.env
 
         if (!env?.GAME_ROOM) {

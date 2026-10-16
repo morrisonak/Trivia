@@ -5,7 +5,6 @@ export const Route = createFileRoute('/api/seed')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        // @ts-expect-error - Cloudflare types
         const env = request.env
 
         if (!env?.DB) {

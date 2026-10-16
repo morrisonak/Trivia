@@ -34,7 +34,11 @@ function DisplaySetup() {
         }),
       })
 
-      const data = await response.json()
+      const data = await response.json() as {
+        error?: string
+        game: { roomCode: string }
+        player: { id: string }
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to join as display')

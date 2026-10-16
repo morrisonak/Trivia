@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { Trophy, Medal, Award, Star, Home, RotateCcw, Loader2 } from 'lucide-react'
 import { getRankEmoji } from '@/lib/scoring'
@@ -9,7 +9,7 @@ export const Route = createFileRoute('/game/$roomCode/results')({
 })
 
 interface Player {
-  id: number
+  id: string
   name: string
   score: number
   correctAnswers: number
@@ -64,7 +64,7 @@ function GameResults() {
       if (!response.ok) {
         throw new Error('Failed to fetch results')
       }
-      const data = await response.json()
+      const data = await response.json() as GameResults
       setResults(data)
       setLoading(false)
     } catch (err) {
@@ -92,7 +92,11 @@ function GameResults() {
         }),
       })
 
-      const data = await response.json()
+      const data = await response.json() as {
+        error?: string
+        game: { roomCode: string }
+        player: { id: string; name: string }
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create game')
@@ -125,7 +129,7 @@ function GameResults() {
       try {
         const response = await fetch(`/api/games/${roomCode}/next-game`)
         if (response.ok) {
-          const data = await response.json()
+          const data = await response.json() as { newRoomCode?: string }
           if (data.newRoomCode) {
             // Stop polling
             if (pollIntervalRef.current) {
@@ -133,20 +137,26 @@ function GameResults() {
             }
 
             // Auto-join the new game
-            const joinResponse = await fetch(`/api/games/${data.newRoomCode}/join`, {
+            const joinResponse = await fetch('/api/games/join', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ playerName: playerName?.trim() }),
+              body: JSON.stringify({
+                roomCode: data.newRoomCode,
+                playerName: playerName?.trim(),
+              }),
             })
 
-            const joinData = await joinResponse.json()
+            const joinData = await joinResponse.json() as {
+              error?: string
+              player?: { id: string; name: string }
+            }
 
-            if (!joinResponse.ok) {
+            if (!joinResponse.ok || !joinData.player) {
               throw new Error(joinData.error || 'Failed to join new game')
             }
 
             // Store new game info
-            sessionStorage.setItem('playerId', joinData.playerId)
+            sessionStorage.setItem('playerId', joinData.player.id)
             sessionStorage.setItem('playerName', playerName!)
             sessionStorage.setItem('isHost', 'false')
 
@@ -159,6 +169,11 @@ function GameResults() {
         }
       } catch (err) {
         console.error('Error polling for new game:', err)
+        setError(err instanceof Error ? err.message : 'Failed to join new game')
+        setWaitingForHost(false)
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+        }
       }
     }, 2000) // Poll every 2 seconds
   }
@@ -196,8 +211,8 @@ function GameResults() {
     )
   }
 
-  const currentPlayer = results.players.find((p) => p.id === Number(playerId))
-  const currentPlayerRank = results.players.findIndex((p) => p.id === Number(playerId)) + 1
+  const currentPlayer = results.players.find((p) => p.id === playerId)
+  const currentPlayerRank = results.players.findIndex((p) => p.id === playerId) + 1
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
@@ -207,7 +222,7 @@ function GameResults() {
           <div className="text-center mb-8 animate-fade-in">
             <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4 animate-bounce" />
             <h1 className="text-4xl md:text-5xl font-black text-white mb-2">
-              {results.winner.id === Number(playerId) ? 'You Win!' : `${results.winner.name} Wins!`}
+              {results.winner.id === playerId ? 'You Win!' : `${results.winner.name} Wins!`}
             </h1>
             <p className="text-2xl text-yellow-400">
               Score: {results.winner.score} points
@@ -225,7 +240,7 @@ function GameResults() {
           <div className="space-y-3">
             {results.players.map((player, index) => {
               const rank = index + 1
-              const isCurrentPlayer = player.id === Number(playerId)
+              const isCurrentPlayer = player.id === playerId
               const rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null
 
               return (

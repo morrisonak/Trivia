@@ -4,7 +4,6 @@ export const Route = createFileRoute('/api/games/join')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // @ts-expect-error - Cloudflare types
         const env = request.env
 
         if (!env?.GAME_ROOM) {
@@ -15,7 +14,11 @@ export const Route = createFileRoute('/api/games/join')({
         }
 
         try {
-          const { roomCode, playerName, isDisplay } = await request.json()
+          const { roomCode, playerName, isDisplay } = await request.json() as {
+            roomCode?: string
+            playerName?: string
+            isDisplay?: boolean
+          }
 
           if (!roomCode || !playerName) {
             return Response.json(
@@ -42,7 +45,7 @@ export const Route = createFileRoute('/api/games/join')({
             return Response.json(error, { status: response.status })
           }
 
-          const data = await response.json()
+          const data = await response.json() as { playerId: string; roomCode: string }
 
           return Response.json({
             success: true,

@@ -44,17 +44,19 @@ function GamePlayComponent() {
   })
   const [loading, setLoading] = useState(true)
   const [playerId, setPlayerId] = useState<string | null>(null)
-  const [playerName, setPlayerName] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const activeRef = useRef(true)
+  const gameOverRef = useRef(false)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttemptsRef = useRef(0)
 
   useEffect(() => {
     // Get player info from URL params or sessionStorage as fallback
     const urlParams = new URLSearchParams(window.location.search)
     const urlPlayerId = urlParams.get('playerId')
-    const urlPlayerName = urlParams.get('playerName')
 
     const storedPlayerId = urlPlayerId || sessionStorage.getItem('playerId')
-    const storedPlayerName = urlPlayerName || sessionStorage.getItem('playerName')
+    const storedPlayerName = urlParams.get('playerName') || sessionStorage.getItem('playerName')
 
     console.log('Play page mounted, player info:', { storedPlayerId, storedPlayerName, roomCode })
 
@@ -65,12 +67,17 @@ function GamePlayComponent() {
     }
 
     setPlayerId(storedPlayerId)
-    setPlayerName(storedPlayerName)
+    activeRef.current = true
+    gameOverRef.current = false
 
     // Connect to Durable Object's WebSocket
     connectWebSocket(storedPlayerId)
 
     return () => {
+      activeRef.current = false
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+      }
       if (wsRef.current) {
         wsRef.current.close()
       }
@@ -87,6 +94,7 @@ function GamePlayComponent() {
 
     ws.onopen = () => {
       console.log('WebSocket connected for gameplay')
+      reconnectAttemptsRef.current = 0
       setLoading(false)
     }
 
@@ -97,19 +105,20 @@ function GamePlayComponent() {
 
         switch (message.type) {
           case 'question':
-            setGameState({
+            // Functional update so the score carries over between questions
+            setGameState(prev => ({
+              ...prev,
               currentQuestion: message.data.question,
               questionNumber: message.data.questionNumber,
               totalQuestions: message.data.totalQuestions,
               timeRemaining: 15,
-              playerScore: gameState.playerScore,
               hasAnswered: false,
               correctAnswer: null,
               selectedAnswer: null,
               showResults: false,
               commentary: null,
               gameOver: false,
-            })
+            }))
             break
 
           case 'timer':
@@ -120,17 +129,20 @@ function GamePlayComponent() {
             break
 
           case 'results':
-            const myScore = message.data.players.find((p: any) => p.id === playerId)?.score || gameState.playerScore
-            setGameState(prev => ({
-              ...prev,
-              correctAnswer: message.data.correctAnswer,
-              showResults: true,
-              commentary: message.data.commentary,
-              playerScore: myScore,
-              gameOver: message.data.isLastQuestion
-            }))
+            setGameState(prev => {
+              const myScore = message.data.players.find((p: any) => p.id === playerId)?.score ?? prev.playerScore
+              return {
+                ...prev,
+                correctAnswer: message.data.correctAnswer,
+                showResults: true,
+                commentary: message.data.commentary,
+                playerScore: myScore,
+                gameOver: message.data.isLastQuestion
+              }
+            })
 
             if (message.data.isLastQuestion) {
+              gameOverRef.current = true
               setTimeout(() => {
                 navigate({ to: `/game/${roomCode}/results` })
               }, 4000)
@@ -138,6 +150,7 @@ function GamePlayComponent() {
             break
 
           case 'game_ended':
+            gameOverRef.current = true
             navigate({ to: `/game/${roomCode}/results` })
             break
         }
@@ -153,6 +166,18 @@ function GamePlayComponent() {
 
     ws.onclose = () => {
       console.log('WebSocket disconnected')
+      // Reconnect with backoff unless we left the page or the game ended
+      if (!activeRef.current || gameOverRef.current) return
+      if (reconnectAttemptsRef.current >= 8) return
+
+      const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 8000)
+      reconnectAttemptsRef.current++
+      console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`)
+      reconnectTimerRef.current = setTimeout(() => {
+        if (activeRef.current && !gameOverRef.current) {
+          connectWebSocket(playerId)
+        }
+      }, delay)
     }
 
     wsRef.current = ws
@@ -181,6 +206,10 @@ function GamePlayComponent() {
 
   const getButtonClass = (option: string) => {
     if (!gameState.showResults) {
+      // Show selected answer more prominently before results
+      if (option === gameState.selectedAnswer) {
+        return 'bg-yellow-500/40 border-yellow-400 text-white ring-2 ring-yellow-400'
+      }
       return 'bg-white/10 border-white/20 text-white [@media(hover:hover)]:hover:bg-white/20'
     }
 

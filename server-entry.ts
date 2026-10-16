@@ -6,7 +6,7 @@ import type { Env } from 'cloudflare:workers'
 export { GameRoom } from './src/durable-objects/GameRoom'
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env) {
     const url = new URL(request.url)
 
     // Handle WebSocket upgrade requests for game rooms
@@ -40,9 +40,8 @@ export default {
     const { default: handler } = await import('@tanstack/react-start/server-entry')
 
     // Call the handler with modified request that includes env in context
-    // @ts-expect-error - Augmenting request with Cloudflare env
     request.env = env
 
-    return handler.fetch(request, env, ctx)
+    return handler.fetch(request)
   },
 }

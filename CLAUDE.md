@@ -33,8 +33,13 @@ npm run db:studio       # Open Drizzle Studio GUI for database management
 npx wrangler d1 execute trivia-db --remote --file=drizzle/[migration].sql  # Apply migration to production
 npx wrangler d1 execute trivia-db --remote --command="[SQL]"               # Execute SQL in production
 
-# Testing
+# Question Import (The Trivia API -> D1)
+node scripts/import-questions.mjs [count]                                  # Generate drizzle/import-questions.sql (default 500)
+npx wrangler d1 execute trivia-db --remote --file=drizzle/import-questions.sql  # Apply (idempotent, deduped by question text)
+
+# Testing & Type Checking
 npm run test            # Run Vitest test suite
+npm run typecheck       # tsc --noEmit (run build first so routeTree.gen.ts is fresh)
 
 # Building & Deployment
 npm run build           # Create production build (required before deployment)
@@ -51,10 +56,10 @@ npx shadcn@latest add [component-name]  # Add new Shadcn/ui components
 
 The app uses two complementary Cloudflare storage layers:
 
-- **D1 (SQLite)**: Persistent data — questions, game records, player answers, scores
-- **Durable Objects (GameRoom)**: Real-time ephemeral state — WebSocket connections, timers, live game orchestration
+- **D1 (SQLite)**: Question bank (seeded via `/api/seed`) and finished-game history (games, players, answers written once at game end)
+- **Durable Objects (GameRoom)**: Live game state — WebSocket connections, timers, scoring, orchestration
 
-API routes handle D1 reads/writes. The GameRoom Durable Object manages the live game loop and broadcasts state changes to connected clients via WebSocket.
+GameRoom persists its state to Durable Object storage (`ctx.storage`) and restores it in the constructor, so games survive hibernation and deploys. All pacing (question ticks, results delay) runs through DO alarms, not `setInterval`. WebSockets use the hibernation API: sockets are tagged with their playerId via `serializeAttachment`, and broadcasts iterate `ctx.getWebSockets()`. At game start, questions are loaded from D1 (`ORDER BY RANDOM()`); at game end, the full game record is written to D1 best-effort.
 
 ### Game Flow
 
@@ -90,8 +95,10 @@ const stub = env.GAME_ROOM.get(id)
 
 Clients connect to `/api/games/[ROOM_CODE]/ws?playerId=[ID]`. Message types:
 
-**Server → Client:** `question`, `timer`, `results`, `game_ended`, `state`, `game_started`
+**Server → Client:** `question`, `timer`, `results`, `game_ended`, `state`, `game_started`, `player_answered`, `pong`
 **Client → Server:** `answer` (with `timeTakenMs`), `ping`
+
+The server identifies the sender from the socket's `serializeAttachment` playerId, not from the message payload. Answers are only accepted while a question is live (`phase === 'question'`); players who don't answer in time get a null answer recorded when the question ends, so accuracy stats always count every question.
 
 ### Scoring System (`src/lib/scoring.ts`)
 
@@ -138,8 +145,6 @@ Defined in `src/db/schema.ts`. Five tables:
 │   │   ├── api.games.join.ts            # POST: Join game
 │   │   ├── api.games.$roomCode.ts       # GET: Game state
 │   │   ├── api.games.$roomCode.start.ts # POST: Start game (host only)
-│   │   ├── api.games.$roomCode.question.ts  # GET: Current question
-│   │   ├── api.games.$roomCode.answer.ts    # POST: Submit answer
 │   │   ├── api.games.$roomCode.results.ts   # GET: Final results
 │   │   ├── api.games.$roomCode.next-game.ts # GET: Play Again redirect
 │   │   └── api.seed.ts                 # POST: Database seeding
@@ -224,7 +229,7 @@ npx wrangler d1 execute trivia-db --remote --command="SELECT name FROM sqlite_ma
 
 - Always run `npm run build` before `npm run deploy`
 - Dev server (`--remote` mode) connects to production D1 — be careful with data modifications
-- Durable Object state is ephemeral; persistent game data lives in D1
+- Durable Object state is persisted to `ctx.storage` (survives hibernation/deploys); finished games are also recorded in D1
 - Player session info (playerId, playerName, isHost) is stored in `sessionStorage`
 - The Big Board display joins as a player with `isDisplay: true` and doesn't count toward max players
 - Never add Claude Code attributions in commit messages

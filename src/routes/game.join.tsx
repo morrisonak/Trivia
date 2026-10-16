@@ -40,7 +40,11 @@ function JoinGame() {
         }),
       })
 
-      const data = await response.json()
+      const data = await response.json() as {
+        error?: string
+        game: { roomCode: string }
+        player: { id: string; name: string }
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to join game')

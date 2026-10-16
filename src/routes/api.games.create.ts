@@ -5,7 +5,6 @@ export const Route = createFileRoute('/api/games/create')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // @ts-expect-error - Cloudflare types
         const env = request.env
 
         if (!env?.GAME_ROOM) {
@@ -71,7 +70,7 @@ export const Route = createFileRoute('/api/games/create')({
             return Response.json(error, { status: response.status })
           }
 
-          const initData = await response.json()
+          const initData = await response.json() as { playerId: string; roomCode: string }
 
           return Response.json({
             success: true,

@@ -5,7 +5,6 @@ export const Route = createFileRoute('/api/games/$roomCode/start')({
     handlers: {
       POST: async ({ request, params }) => {
         const { roomCode } = params
-        // @ts-expect-error - Cloudflare types
         const env = request.env
 
         if (!env?.GAME_ROOM) {
@@ -16,7 +15,7 @@ export const Route = createFileRoute('/api/games/$roomCode/start')({
         }
 
         try {
-          const { playerId } = await request.json()
+          const { playerId } = await request.json() as { playerId?: string }
 
           // Get Durable Object stub for this room
           const id = env.GAME_ROOM.idFromName(roomCode.toUpperCase())
