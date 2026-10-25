@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Trivia Nights is a real-time multiplayer trivia game built with TanStack Start and deployed on Cloudflare Workers. Players create or join game rooms via 4-character room codes, answer timed questions with speed-based scoring, and compete on a live leaderboard. Supports a "Big Board" display mode for TVs/monitors at parties.
+Trivia Nights is a real-time multiplayer trivia game built with TanStack Start and deployed on Cloudflare Workers. Players (2 to 16 per game) create or join game rooms via 4-character room codes, answer timed questions with speed-based scoring, and compete on a live leaderboard. Supports a "Big Board" display mode for TVs/monitors at parties, with a scan-to-join QR code and animated cut scenes between questions.
 
 ## Tech Stack
 
@@ -57,9 +57,9 @@ npx shadcn@latest add [component-name]  # Add new Shadcn/ui components
 The app uses two complementary Cloudflare storage layers:
 
 - **D1 (SQLite)**: Question bank (seeded via `/api/seed`) and finished-game history (games, players, answers written once at game end)
-- **Durable Objects (GameRoom)**: Live game state — WebSocket connections, timers, scoring, orchestration
+- **Durable Objects (GameRoom)**: Live game state: WebSocket connections, timers, scoring, orchestration
 
-GameRoom persists its state to Durable Object storage (`ctx.storage`) and restores it in the constructor, so games survive hibernation and deploys. All pacing (question ticks, results delay) runs through DO alarms, not `setInterval`. WebSockets use the hibernation API: sockets are tagged with their playerId via `serializeAttachment`, and broadcasts iterate `ctx.getWebSockets()`. At game start, questions are loaded from D1 (`ORDER BY RANDOM()`); at game end, the full game record is written to D1 best-effort.
+GameRoom persists its state to Durable Object storage (`ctx.storage`) and restores it in the constructor, so games survive hibernation and deploys. All pacing (question ticks, results delay) runs through DO alarms, not `setInterval`. WebSockets use the hibernation API: sockets are tagged with their playerId via `serializeAttachment`, and broadcasts iterate `ctx.getWebSockets()`. At game start, questions are loaded from D1 in random order, with questions used in the last 15 games (`RECENT_GAMES_TO_AVOID`) sorted last so groups rarely see repeats; at game end, the full game record is written to D1 best-effort.
 
 ### Game Flow
 
@@ -67,11 +67,24 @@ GameRoom persists its state to Durable Object storage (`ctx.storage`) and restor
 Create Game → Lobby (polling) → Start → Gameplay (WebSocket) → Results → Play Again
 ```
 
-1. **Create/Join**: API routes create a Durable Object instance and D1 records
+1. **Create/Join**: API routes create/join the GameRoom Durable Object. Max players is 2 to 16 (`MAX_PLAYERS_LIMIT`). `/game/join?code=XXXX` prefills the room code (used by the Big Board QR code)
 2. **Lobby**: Clients poll `/api/games/$roomCode` every 2s for player list updates
 3. **Gameplay**: WebSocket connection to Durable Object for questions, timers, results
 4. **Results**: Fetched from Durable Object, displayed with rankings
-5. **Play Again**: Host creates new game linked to previous room; other players auto-redirect
+5. **Play Again**: Host creates new game linked to previous room (`previousRoomCode`); the create API copies the previous game's `maxPlayers`/`questionCount` unless new values are given. Players and the Big Board poll `next-game` and auto-redirect
+
+### Game Phases (GameRoom `phase`, all driven by DO alarms)
+
+```
+starting (3s, START_DELAY_MS) → intro (2.5s, INTRO_DELAY_MS) → question (15s ticks) → results (4s, RESULTS_DELAY_MS) → intro ... → finished
+```
+
+- `starting`: "Get Ready" cut scene after `game_started`
+- `intro`: `question_intro` is broadcast and clients show the question cut scene; the answer timer has NOT started yet, so animations never cost players time
+- `question`: question is live, timer ticks once per second; ends early when every non-display player has answered
+- `results`: correct answer and scores revealed; then the next `intro`, or `endGame()` after the last question
+
+Clients that connect mid-game are caught up for the current phase (`game_started`, `question_intro`, or `question` + `timer`).
 
 ### Custom Server Entry (CRITICAL)
 
@@ -95,7 +108,7 @@ const stub = env.GAME_ROOM.get(id)
 
 Clients connect to `/api/games/[ROOM_CODE]/ws?playerId=[ID]`. Message types:
 
-**Server → Client:** `question`, `timer`, `results`, `game_ended`, `state`, `game_started`, `player_answered`, `pong`
+**Server → Client:** `question_intro`, `question`, `timer`, `results`, `game_ended`, `state`, `game_started`, `player_answered`, `pong`
 **Client → Server:** `answer` (with `timeTakenMs`), `ping`
 
 The server identifies the sender from the socket's `serializeAttachment` playerId, not from the message payload. Answers are only accepted while a question is live (`phase === 'question'`); players who don't answer in time get a null answer recorded when the question ends, so accuracy stats always count every question.
@@ -140,7 +153,7 @@ Defined in `src/db/schema.ts`. Five tables:
 │   │   ├── game.$roomCode.play.tsx      # Active gameplay (WebSocket)
 │   │   ├── game.$roomCode.results.tsx   # Final results & Play Again
 │   │   ├── display.tsx                  # Big Board setup page
-│   │   ├── display.$roomCode.tsx        # Big Board live display (WebSocket)
+│   │   ├── display_.$roomCode.tsx       # Big Board live display (WebSocket); `_` un-nests it from display.tsx
 │   │   ├── api.games.create.ts          # POST: Create game
 │   │   ├── api.games.join.ts            # POST: Join game
 │   │   ├── api.games.$roomCode.ts       # GET: Game state
@@ -160,12 +173,13 @@ Defined in `src/db/schema.ts`. Five tables:
 │   │   ├── scoring.ts                 # Points calculation (speed + streak)
 │   │   └── utils.ts                   # Tailwind merge utility
 │   ├── components/
+│   │   ├── CutScene.tsx               # Cut scenes (start / question intro / final) + useCutScene hook
 │   │   ├── Header.tsx                 # Navigation with slide-out menu
 │   │   └── ui/                        # Shadcn/ui components
 │   ├── integrations/
 │   │   └── tanstack-query/            # React Query providers
 │   ├── router.tsx                     # Router configuration
-│   └── styles.css                     # Global styles
+│   └── styles.css                     # Global styles + transition keyframes (wipe, slam-in, rise-in, pop)
 ├── drizzle/                           # Database migrations
 ├── public/                            # Static assets
 ├── server-entry.ts                    # Custom Cloudflare Workers entry (WebSocket + env injection)
@@ -219,6 +233,9 @@ Defined in `src/db/schema.ts`. Five tables:
 ### Issue: Durable Object not found
 **Solution**: Check `wrangler.jsonc` has both the `durable_objects.bindings` and `migrations` sections configured for `GameRoom`.
 
+### Issue: A route like `/display/$roomCode` renders its parent page instead
+**Solution**: In TanStack flat file routing, `display.$roomCode.tsx` is a *child* of `display.tsx` and only renders inside the parent's `<Outlet />`. Either add an `<Outlet />` to the parent (as `game.$roomCode.tsx` does) or un-nest the child with a trailing underscore (`display_.$roomCode.tsx`, route id `/display_/$roomCode`, URL unchanged).
+
 ### Issue: Migration fails with "table already exists"
 **Solution**: Check if migration was already applied:
 ```bash
@@ -228,8 +245,9 @@ npx wrangler d1 execute trivia-db --remote --command="SELECT name FROM sqlite_ma
 ## Important Notes
 
 - Always run `npm run build` before `npm run deploy`
-- Dev server (`--remote` mode) connects to production D1 — be careful with data modifications
+- Dev server (`--remote` mode) connects to production D1, so be careful with data modifications
 - Durable Object state is persisted to `ctx.storage` (survives hibernation/deploys); finished games are also recorded in D1
 - Player session info (playerId, playerName, isHost) is stored in `sessionStorage`
-- The Big Board display joins as a player with `isDisplay: true` and doesn't count toward max players
+- The Big Board display joins as a player with `isDisplay: true` and doesn't count toward max players. Its layouts get denser for big rooms (lobby grid up to 4 columns, two-column final leaderboard past 8 players)
+- Question categories are the 10 from The Trivia API (Science, Geography, Music, etc.); keep `src/db/seed-questions.ts` using the same names
 - Never add Claude Code attributions in commit messages
