@@ -14,7 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GameJoinRouteImport } from './routes/game.join'
 import { Route as GameCreateRouteImport } from './routes/game.create'
 import { Route as GameRoomCodeRouteImport } from './routes/game.$roomCode'
-import { Route as DisplayRoomCodeRouteImport } from './routes/display.$roomCode'
+import { Route as DisplayRoomCodeRouteImport } from './routes/display_.$roomCode'
 import { Route as ApiSeedRouteImport } from './routes/api.seed'
 import { Route as GameRoomCodeResultsRouteImport } from './routes/game.$roomCode.results'
 import { Route as GameRoomCodePlayRouteImport } from './routes/game.$roomCode.play'
@@ -51,9 +51,9 @@ const GameRoomCodeRoute = GameRoomCodeRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const DisplayRoomCodeRoute = DisplayRoomCodeRouteImport.update({
-  id: '/$roomCode',
-  path: '/$roomCode',
-  getParentRoute: () => DisplayRoute,
+  id: '/display_/$roomCode',
+  path: '/display/$roomCode',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSeedRoute = ApiSeedRouteImport.update({
   id: '/api/seed',
@@ -104,7 +104,7 @@ const ApiGamesRoomCodeNextGameRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/display': typeof DisplayRouteWithChildren
+  '/display': typeof DisplayRoute
   '/api/seed': typeof ApiSeedRoute
   '/display/$roomCode': typeof DisplayRoomCodeRoute
   '/game/$roomCode': typeof GameRoomCodeRouteWithChildren
@@ -121,7 +121,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/display': typeof DisplayRouteWithChildren
+  '/display': typeof DisplayRoute
   '/api/seed': typeof ApiSeedRoute
   '/display/$roomCode': typeof DisplayRoomCodeRoute
   '/game/$roomCode': typeof GameRoomCodeRouteWithChildren
@@ -139,9 +139,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/display': typeof DisplayRouteWithChildren
+  '/display': typeof DisplayRoute
   '/api/seed': typeof ApiSeedRoute
-  '/display/$roomCode': typeof DisplayRoomCodeRoute
+  '/display_/$roomCode': typeof DisplayRoomCodeRoute
   '/game/$roomCode': typeof GameRoomCodeRouteWithChildren
   '/game/create': typeof GameCreateRoute
   '/game/join': typeof GameJoinRoute
@@ -194,7 +194,7 @@ export interface FileRouteTypes {
     | '/'
     | '/display'
     | '/api/seed'
-    | '/display/$roomCode'
+    | '/display_/$roomCode'
     | '/game/$roomCode'
     | '/game/create'
     | '/game/join'
@@ -210,8 +210,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DisplayRoute: typeof DisplayRouteWithChildren
+  DisplayRoute: typeof DisplayRoute
   ApiSeedRoute: typeof ApiSeedRoute
+  DisplayRoomCodeRoute: typeof DisplayRoomCodeRoute
   GameRoomCodeRoute: typeof GameRoomCodeRouteWithChildren
   GameCreateRoute: typeof GameCreateRoute
   GameJoinRoute: typeof GameJoinRoute
@@ -257,12 +258,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GameRoomCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/display/$roomCode': {
-      id: '/display/$roomCode'
-      path: '/$roomCode'
+    '/display_/$roomCode': {
+      id: '/display_/$roomCode'
+      path: '/display/$roomCode'
       fullPath: '/display/$roomCode'
       preLoaderRoute: typeof DisplayRoomCodeRouteImport
-      parentRoute: typeof DisplayRoute
+      parentRoute: typeof rootRouteImport
     }
     '/api/seed': {
       id: '/api/seed'
@@ -330,17 +331,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface DisplayRouteChildren {
-  DisplayRoomCodeRoute: typeof DisplayRoomCodeRoute
-}
-
-const DisplayRouteChildren: DisplayRouteChildren = {
-  DisplayRoomCodeRoute: DisplayRoomCodeRoute,
-}
-
-const DisplayRouteWithChildren =
-  DisplayRoute._addFileChildren(DisplayRouteChildren)
-
 interface GameRoomCodeRouteChildren {
   GameRoomCodePlayRoute: typeof GameRoomCodePlayRoute
   GameRoomCodeResultsRoute: typeof GameRoomCodeResultsRoute
@@ -372,8 +362,9 @@ const ApiGamesRoomCodeRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DisplayRoute: DisplayRouteWithChildren,
+  DisplayRoute: DisplayRoute,
   ApiSeedRoute: ApiSeedRoute,
+  DisplayRoomCodeRoute: DisplayRoomCodeRoute,
   GameRoomCodeRoute: GameRoomCodeRouteWithChildren,
   GameCreateRoute: GameCreateRoute,
   GameJoinRoute: GameJoinRoute,

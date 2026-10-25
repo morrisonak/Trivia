@@ -4,7 +4,11 @@ import { calculatePoints } from '../lib/scoring'
 
 const QUESTION_TIME_SECONDS = 15
 const RESULTS_DELAY_MS = 4000
-const START_DELAY_MS = 1000
+const START_DELAY_MS = 3000
+// Cut scene shown before each question; the answer timer starts after it
+const INTRO_DELAY_MS = 2500
+// Questions used in this many recent games are picked last
+const RECENT_GAMES_TO_AVOID = 15
 
 interface Player {
   id: string
@@ -22,6 +26,7 @@ interface Question {
   optionC: string
   optionD: string
   correctAnswer: string
+  category: string | null
   commentary: string | null
 }
 
@@ -35,9 +40,10 @@ interface Answer {
 }
 
 // 'starting': brief pause before the first question
+// 'intro': cut scene announcing the next question
 // 'question': a question is live and the per-second tick alarm is running
 // 'results': answer reveal is showing; next question arrives after a delay
-type Phase = 'idle' | 'starting' | 'question' | 'results'
+type Phase = 'idle' | 'starting' | 'intro' | 'question' | 'results'
 
 interface GameState {
   roomCode: string
@@ -169,24 +175,17 @@ export class GameRoom extends DurableObject<Env> {
     ws.serializeAttachment({ playerId })
     this.broadcastState()
 
-    // If a question is live, catch the newly connected player up
+    // Catch the newly connected player up on whatever is on screen right now
+    if (this.state.phase === 'starting') {
+      ws.send(JSON.stringify({ type: 'game_started', message: 'Game is starting!' }))
+    }
+
+    if (this.state.phase === 'intro' && this.state.currentQuestionIndex < this.state.questions.length) {
+      ws.send(JSON.stringify(this.introMessage()))
+    }
+
     if (this.state.phase === 'question' && this.state.currentQuestionIndex < this.state.questions.length) {
-      const question = this.state.questions[this.state.currentQuestionIndex]
-      ws.send(JSON.stringify({
-        type: 'question',
-        data: {
-          questionNumber: this.state.currentQuestionIndex + 1,
-          totalQuestions: this.state.questions.length,
-          question: {
-            id: question.id,
-            text: question.text,
-            optionA: question.optionA,
-            optionB: question.optionB,
-            optionC: question.optionC,
-            optionD: question.optionD
-          }
-        }
-      }))
+      ws.send(JSON.stringify(this.questionMessage()))
 
       if (this.state.timer !== null) {
         ws.send(JSON.stringify({
@@ -331,6 +330,10 @@ export class GameRoom extends DurableObject<Env> {
         await this.nextQuestion()
         break
 
+      case 'intro':
+        await this.showQuestion()
+        break
+
       case 'question': {
         if (this.state.timer !== null && this.state.timer > 0) {
           this.state.timer--
@@ -376,11 +379,17 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async loadQuestions() {
+    // Prefer questions that weren't played in recent games; fall back to them when the bank runs low
     const result = await this.env.DB.prepare(
       `SELECT id, text, option_a AS optionA, option_b AS optionB, option_c AS optionC, option_d AS optionD,
-              correct_answer AS correctAnswer, commentary
-       FROM questions ORDER BY RANDOM() LIMIT ?`
-    ).bind(this.state.questionCount).all<Question>()
+              correct_answer AS correctAnswer, category, commentary
+       FROM questions
+       ORDER BY id IN (
+         SELECT question_id FROM game_questions
+         WHERE game_id IN (SELECT id FROM games ORDER BY id DESC LIMIT ?)
+       ), RANDOM()
+       LIMIT ?`
+    ).bind(RECENT_GAMES_TO_AVOID, this.state.questionCount).all<Question>()
 
     if (!result.results.length) {
       throw new Error('No questions found in database')
@@ -389,20 +398,23 @@ export class GameRoom extends DurableObject<Env> {
     this.state.questions = result.results
   }
 
-  private async nextQuestion() {
-    if (this.state.currentQuestionIndex >= this.state.questions.length) {
-      await this.endGame()
-      return
-    }
-
+  private introMessage() {
     const question = this.state.questions[this.state.currentQuestionIndex]
-    this.state.currentQuestionAnswers.clear()
-    this.state.timer = QUESTION_TIME_SECONDS
-    this.state.phase = 'question'
-    await this.save()
+    return {
+      type: 'question_intro',
+      data: {
+        questionNumber: this.state.currentQuestionIndex + 1,
+        totalQuestions: this.state.questions.length,
+        category: question.category,
+        isLastQuestion: this.state.currentQuestionIndex >= this.state.questions.length - 1,
+      }
+    }
+  }
 
-    // Send question to all players (without correct answer)
-    this.broadcast({
+  // The question without its correct answer
+  private questionMessage() {
+    const question = this.state.questions[this.state.currentQuestionIndex]
+    return {
       type: 'question',
       data: {
         questionNumber: this.state.currentQuestionIndex + 1,
@@ -416,7 +428,29 @@ export class GameRoom extends DurableObject<Env> {
           optionD: question.optionD
         }
       }
-    })
+    }
+  }
+
+  private async nextQuestion() {
+    if (this.state.currentQuestionIndex >= this.state.questions.length) {
+      await this.endGame()
+      return
+    }
+
+    // Announce the question with a cut scene first, then reveal it
+    this.state.phase = 'intro'
+    await this.save()
+    this.broadcast(this.introMessage())
+    await this.ctx.storage.setAlarm(Date.now() + INTRO_DELAY_MS)
+  }
+
+  private async showQuestion() {
+    this.state.currentQuestionAnswers.clear()
+    this.state.timer = QUESTION_TIME_SECONDS
+    this.state.phase = 'question'
+    await this.save()
+
+    this.broadcast(this.questionMessage())
 
     await this.ctx.storage.setAlarm(Date.now() + 1000)
   }

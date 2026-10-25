@@ -10,9 +10,13 @@ import {
   Play,
   Crown,
 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { formatRoomCode } from '@/lib/room-codes'
+import { CutScene, useCutScene } from '@/components/CutScene'
 
-export const Route = createFileRoute('/display/$roomCode')({
+const FINAL_SCENE_MS = 3000
+
+export const Route = createFileRoute('/display_/$roomCode')({
   component: BigBoardDisplay,
 })
 
@@ -68,6 +72,13 @@ function BigBoardDisplay() {
   const [playerAnswerStatus, setPlayerAnswerStatus] = useState<Map<string, boolean>>(new Map())
   const activeRef = useRef(true)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const finalSceneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cutScene = useCutScene()
+  const [joinUrl, setJoinUrl] = useState('')
+
+  useEffect(() => {
+    setJoinUrl(`${window.location.origin}/game/join?code=${roomCode}`)
+  }, [roomCode])
 
   useEffect(() => {
     // Verify display session
@@ -89,11 +100,70 @@ function BigBoardDisplay() {
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
       }
+      if (finalSceneTimerRef.current) {
+        clearTimeout(finalSceneTimerRef.current)
+      }
       if (wsRef.current) {
         wsRef.current.close()
       }
     }
   }, [roomCode])
+
+  // Follow the host into the next game when they hit Play Again
+  useEffect(() => {
+    if (displayState.status !== 'results') return
+
+    let cancelled = false
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/games/${roomCode}/next-game`)
+        if (!response.ok) return
+        const data = await response.json() as { newRoomCode?: string }
+        if (!data.newRoomCode || cancelled) return
+
+        clearInterval(interval)
+        const joinResponse = await fetch('/api/games/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playerName: 'Big Board Display',
+            roomCode: data.newRoomCode,
+            isDisplay: true,
+          }),
+        })
+        if (!joinResponse.ok || cancelled) return
+        const joinData = await joinResponse.json() as { player: { id: string } }
+
+        sessionStorage.setItem('playerId', joinData.player.id)
+        sessionStorage.setItem('roomCode', data.newRoomCode)
+
+        setPlayerAnswerStatus(new Map())
+        setDisplayState(prev => ({
+          ...prev,
+          status: 'lobby',
+          players: [],
+          currentQuestion: null,
+          questionNumber: 0,
+          timeRemaining: 15,
+          correctAnswer: null,
+          commentary: null,
+          winner: null,
+          showResults: false,
+        }))
+        navigate({
+          to: '/display/$roomCode',
+          params: { roomCode: data.newRoomCode },
+        })
+      } catch (err) {
+        console.error('Failed to check for next game:', err)
+      }
+    }, 2000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [displayState.status, roomCode])
 
   const connectWebSocket = (playerId: string) => {
     console.log('Connecting display to WebSocket for room:', roomCode)
@@ -114,16 +184,21 @@ function BigBoardDisplay() {
         console.log('Display received WebSocket message:', message)
 
         switch (message.type) {
-          case 'state':
-            // Update lobby state
+          case 'state': {
+            // Update lobby state; a finished game (e.g. reconnect after the end) shows the leaderboard
+            const players: Player[] = message.data.players || []
+            const finished = message.data.status === 'finished'
+            const sorted = finished ? [...players].sort((a, b) => b.score - a.score) : players
             setDisplayState(prev => ({
               ...prev,
-              status: message.data.status,
-              players: message.data.players || [],
+              status: finished ? 'results' : message.data.status,
+              players: sorted,
               maxPlayers: message.data.maxPlayers || prev.maxPlayers,
               totalQuestions: message.data.questionCount || 10,
+              winner: finished ? sorted[0] || null : prev.winner,
             }))
             break
+          }
 
           case 'player_answered':
             setPlayerAnswerStatus(prev => {
@@ -134,14 +209,27 @@ function BigBoardDisplay() {
             break
 
           case 'game_started':
+            cutScene.show({ kind: 'start' })
             setDisplayState(prev => ({
               ...prev,
               status: 'playing',
             }))
             break
 
+          case 'question_intro':
+            cutScene.show({
+              kind: 'question',
+              questionNumber: message.data.questionNumber,
+              totalQuestions: message.data.totalQuestions,
+              category: message.data.category ?? null,
+              isLastQuestion: message.data.isLastQuestion,
+            })
+            setDisplayState(prev => ({ ...prev, status: 'playing' }))
+            break
+
           case 'question':
-            // New question - reset answer tracking
+            // New question - wipe the cut scene away and reset answer tracking
+            cutScene.hide()
             setPlayerAnswerStatus(new Map())
             setDisplayState(prev => ({
               ...prev,
@@ -175,17 +263,23 @@ function BigBoardDisplay() {
             }))
             break
 
-          case 'game_ended':
-            // Game finished
-            const finalPlayers = message.data.players || displayState.players
+          case 'game_ended': {
+            // Game finished: drumroll cut scene, then reveal the leaderboard
+            const finalPlayers: Player[] = message.data.players || []
             const sortedPlayers = [...finalPlayers].sort((a, b) => b.score - a.score)
-            setDisplayState(prev => ({
-              ...prev,
-              status: 'results',
-              players: sortedPlayers,
-              winner: sortedPlayers[0] || null,
-            }))
+            cutScene.show({ kind: 'final' })
+            if (finalSceneTimerRef.current) clearTimeout(finalSceneTimerRef.current)
+            finalSceneTimerRef.current = setTimeout(() => {
+              setDisplayState(prev => ({
+                ...prev,
+                status: 'results',
+                players: sortedPlayers,
+                winner: sortedPlayers[0] || null,
+              }))
+              cutScene.hide()
+            }, FINAL_SCENE_MS)
             break
+          }
         }
       } catch (err) {
         console.error('Failed to parse display WebSocket message:', err)
@@ -200,7 +294,8 @@ function BigBoardDisplay() {
     ws.onclose = () => {
       console.log('Display WebSocket disconnected')
       // Attempt to reconnect after 2 seconds, but only while still mounted
-      if (!activeRef.current) return
+      // and only if this socket hasn't been replaced (e.g. after following Play Again)
+      if (!activeRef.current || wsRef.current !== ws) return
       reconnectTimerRef.current = setTimeout(() => {
         const playerId = sessionStorage.getItem('playerId')
         if (activeRef.current && playerId) {
@@ -216,12 +311,22 @@ function BigBoardDisplay() {
     <div className="flex flex-col items-center justify-center min-h-screen p-8">
       <div className="text-center mb-12">
         <h1 className="text-8xl font-black text-white mb-4">TRIVIA NIGHTS</h1>
-        <div className="text-6xl font-mono font-bold text-yellow-400 tracking-wider mb-4">
-          {formatRoomCode(roomCode)}
+        <div className="flex items-center justify-center gap-12 mt-8">
+          {joinUrl && (
+            <div className="bg-white p-4 rounded-2xl shadow-2xl animate-pop">
+              <QRCodeSVG value={joinUrl} size={220} />
+            </div>
+          )}
+          <div className="text-left">
+            <p className="text-3xl text-gray-300 mb-2">Scan to join, or enter code:</p>
+            <div className="text-8xl font-mono font-bold text-yellow-400 tracking-wider">
+              {formatRoomCode(roomCode)}
+            </div>
+            {joinUrl && (
+              <p className="text-2xl text-gray-400 mt-2">{new URL(joinUrl).host}/game/join</p>
+            )}
+          </div>
         </div>
-        <p className="text-3xl text-gray-300">
-          Join with code on your device!
-        </p>
       </div>
 
       <div className="w-full max-w-4xl">
@@ -299,9 +404,9 @@ function BigBoardDisplay() {
 
       {/* Question */}
       {displayState.currentQuestion && (
-        <div className="flex-1 flex flex-col justify-center">
-          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-12 border-2 border-white/20 mb-8">
-            <h2 className="text-5xl font-bold text-white text-center mb-12">
+        <div key={displayState.questionNumber} className="flex-1 flex flex-col justify-center">
+          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-12 border-2 border-white/20 mb-8 animate-rise-in">
+            <h2 className="text-5xl font-bold text-white text-center mb-12 animate-fade-in" style={{ animationDelay: '0.2s' }}>
               {displayState.currentQuestion.text}
             </h2>
 
@@ -312,16 +417,17 @@ function BigBoardDisplay() {
                 { key: 'B', text: displayState.currentQuestion.optionB, color: 'bg-green-500/20 border-green-400' },
                 { key: 'C', text: displayState.currentQuestion.optionC, color: 'bg-yellow-500/20 border-yellow-400' },
                 { key: 'D', text: displayState.currentQuestion.optionD, color: 'bg-purple-500/20 border-purple-400' },
-              ].map((option) => (
+              ].map((option, index) => (
                 <div
                   key={option.key}
-                  className={`p-6 rounded-xl border-2 ${
+                  className={`p-6 rounded-xl border-2 transition-all duration-500 ${
                     displayState.correctAnswer === option.key
-                      ? 'bg-green-500/30 border-green-500 animate-pulse'
+                      ? 'bg-green-500/30 border-green-500 animate-pop scale-105'
                       : displayState.correctAnswer
-                      ? 'opacity-50'
-                      : option.color
+                      ? 'opacity-30 scale-95'
+                      : `${option.color} animate-rise-in`
                   }`}
+                  style={displayState.correctAnswer ? undefined : { animationDelay: `${0.35 + index * 0.12}s` }}
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-4xl font-black text-white">
@@ -338,7 +444,7 @@ function BigBoardDisplay() {
 
             {/* Commentary */}
             {displayState.commentary && (
-              <div className="mt-8 p-6 bg-yellow-400/20 rounded-xl border-2 border-yellow-400/50">
+              <div className="mt-8 p-6 bg-yellow-400/20 rounded-xl border-2 border-yellow-400/50 animate-rise-in" style={{ animationDelay: '0.4s' }}>
                 <p className="text-2xl text-yellow-100 text-center italic">
                   "{displayState.commentary}"
                 </p>
@@ -376,12 +482,12 @@ function BigBoardDisplay() {
     <div className="min-h-screen p-8 flex flex-col items-center justify-center">
       <Trophy className="w-32 h-32 text-yellow-400 mb-8 animate-bounce" />
 
-      <h1 className="text-7xl font-black text-white mb-4">
+      <h1 className="text-7xl font-black text-white mb-4 animate-slam-in">
         {displayState.winner ? `${displayState.winner.name} Wins!` : 'Game Over!'}
       </h1>
 
       {displayState.winner && (
-        <p className="text-4xl text-yellow-400 mb-12">
+        <p className="text-4xl text-yellow-400 mb-12 animate-rise-in" style={{ animationDelay: '0.5s' }}>
           Final Score: {displayState.winner.score}
         </p>
       )}
@@ -392,20 +498,21 @@ function BigBoardDisplay() {
         </h2>
 
         <div className="space-y-4">
-          {displayState.players
+          {[...displayState.players]
             .sort((a, b) => b.score - a.score)
-            .map((player, index) => {
+            .map((player, index, all) => {
               const rank = index + 1
               const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`
 
               return (
                 <div
                   key={player.id}
-                  className={`flex items-center justify-between p-6 rounded-xl ${
+                  className={`flex items-center justify-between p-6 rounded-xl animate-slide-in ${
                     rank === 1
                       ? 'bg-yellow-400/20 border-2 border-yellow-400'
                       : 'bg-white/10 border border-white/20'
                   }`}
+                  style={{ animationDelay: `${0.8 + (all.length - 1 - index) * 0.25}s` }}
                 >
                   <div className="flex items-center gap-6">
                     <span className="text-4xl font-bold text-white">
@@ -427,6 +534,9 @@ function BigBoardDisplay() {
       <div className="mt-12 text-3xl text-gray-400">
         Thanks for playing!
       </div>
+      <p className="mt-4 text-xl text-gray-500 animate-pulse">
+        Waiting for the host to start another game...
+      </p>
     </div>
   )
 
@@ -446,6 +556,7 @@ function BigBoardDisplay() {
       {displayState.status === 'lobby' && renderLobby()}
       {displayState.status === 'playing' && renderPlaying()}
       {displayState.status === 'results' && renderResults()}
+      <CutScene scene={cutScene.scene} exiting={cutScene.exiting} size="board" />
     </div>
   )
 }

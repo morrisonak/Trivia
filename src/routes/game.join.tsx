@@ -10,7 +10,10 @@ export const Route = createFileRoute('/game/join')({
 function JoinGame() {
   const navigate = useNavigate()
   const [playerName, setPlayerName] = useState('')
-  const [roomCode, setRoomCode] = useState('')
+  // Prefilled when arriving from the Big Board's QR code (/game/join?code=ABCD)
+  const [roomCode, setRoomCode] = useState(() =>
+    (new URLSearchParams(window.location.search).get('code') ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+  )
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState('')
 

@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { Timer, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { CutScene, useCutScene } from '@/components/CutScene'
 
 interface Question {
   id: number
@@ -49,6 +50,7 @@ function GamePlayComponent() {
   const gameOverRef = useRef(false)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptsRef = useRef(0)
+  const cutScene = useCutScene()
 
   useEffect(() => {
     // Get player info from URL params or sessionStorage as fallback
@@ -104,7 +106,22 @@ function GamePlayComponent() {
         console.log('WebSocket message:', message)
 
         switch (message.type) {
+          case 'game_started':
+            cutScene.show({ kind: 'start' })
+            break
+
+          case 'question_intro':
+            cutScene.show({
+              kind: 'question',
+              questionNumber: message.data.questionNumber,
+              totalQuestions: message.data.totalQuestions,
+              category: message.data.category ?? null,
+              isLastQuestion: message.data.isLastQuestion,
+            })
+            break
+
           case 'question':
+            cutScene.hide()
             // Functional update so the score carries over between questions
             setGameState(prev => ({
               ...prev,
@@ -256,6 +273,7 @@ function GamePlayComponent() {
           <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
           <p className="text-white text-xl">Waiting for next question...</p>
         </div>
+        <CutScene scene={cutScene.scene} exiting={cutScene.exiting} />
       </div>
     )
   }
@@ -284,7 +302,7 @@ function GamePlayComponent() {
         </div>
 
         {/* Question Card */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-6">
+        <div key={gameState.questionNumber} className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-6 animate-rise-in">
           <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-8">
             {gameState.currentQuestion.text}
           </h2>
@@ -296,12 +314,13 @@ function GamePlayComponent() {
               { key: 'B', text: gameState.currentQuestion.optionB },
               { key: 'C', text: gameState.currentQuestion.optionC },
               { key: 'D', text: gameState.currentQuestion.optionD },
-            ].map((option) => (
+            ].map((option, index) => (
               <button
                 key={option.key}
                 onClick={() => handleAnswer(option.key)}
                 disabled={gameState.hasAnswered}
-                className={`p-4 rounded-lg border-2 font-medium transition-all transform [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-between ${getButtonClass(option.key)}`}
+                className={`p-4 rounded-lg border-2 font-medium transition-all transform [@media(hover:hover)]:hover:scale-105 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-between animate-rise-in ${getButtonClass(option.key)} ${gameState.showResults && option.key === gameState.correctAnswer ? 'animate-pop' : ''}`}
+                style={{ animationDelay: gameState.showResults ? '0s' : `${0.15 + index * 0.08}s` }}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl font-bold">{option.key}</span>
@@ -331,7 +350,7 @@ function GamePlayComponent() {
 
           {/* Result Message */}
           {gameState.showResults && (
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center animate-slam-in">
               {gameState.selectedAnswer === gameState.correctAnswer ? (
                 <p className="text-green-400 text-xl font-bold">Correct! 🎉</p>
               ) : gameState.selectedAnswer ? (
@@ -351,6 +370,7 @@ function GamePlayComponent() {
           Room: {roomCode}
         </div>
       </div>
+      <CutScene scene={cutScene.scene} exiting={cutScene.exiting} />
     </div>
   )
 }

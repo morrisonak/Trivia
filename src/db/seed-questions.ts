@@ -9,7 +9,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Paris",
     optionD: "Madrid",
     correctAnswer: "C",
-    category: "geography",
+    category: "Geography",
     difficulty: 1,
     commentary: "Oui oui! Paris is indeed the city of love, croissants, and people who judge your pronunciation."
   },
@@ -20,7 +20,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Jupiter",
     optionD: "Saturn",
     correctAnswer: "B",
-    category: "science",
+    category: "Science",
     difficulty: 1,
     commentary: "Mars gets its red color from iron oxide (rust) on its surface. It's basically a giant rusty ball in space!"
   },
@@ -31,7 +31,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Leonardo da Vinci",
     optionD: "Michelangelo",
     correctAnswer: "C",
-    category: "art",
+    category: "Arts and Literature",
     difficulty: 1,
     commentary: "Leonardo da Vinci spent 4 years on that smile. Some people can't even commit to a Netflix series that long!"
   },
@@ -42,7 +42,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Giraffe",
     optionD: "Polar Bear",
     correctAnswer: "B",
-    category: "nature",
+    category: "Science",
     difficulty: 1,
     commentary: "The blue whale's heart alone weighs as much as a car. Talk about wearing your heart on your... chassis?"
   },
@@ -53,7 +53,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "1945",
     optionD: "1946",
     correctAnswer: "C",
-    category: "history",
+    category: "History",
     difficulty: 2,
     commentary: "1945: The year the world collectively said 'Never again!' ...and then invented the Cold War."
   },
@@ -66,7 +66,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Parasite",
     optionD: "Once Upon a Time in Hollywood",
     correctAnswer: "C",
-    category: "entertainment",
+    category: "Film and TV",
     difficulty: 2,
     commentary: "Parasite made history as the first non-English film to win Best Picture. Subtitles: 1, Hollywood: 0!"
   },
@@ -77,7 +77,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Starbucks",
     optionD: "Luke's Diner",
     correctAnswer: "A",
-    category: "entertainment",
+    category: "Film and TV",
     difficulty: 1,
     commentary: "Central Perk: Where six friends somehow always got the same couch despite living in New York City."
   },
@@ -90,7 +90,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Hyper Transfer Text Protocol",
     optionD: "Home Tool Transfer Protocol",
     correctAnswer: "A",
-    category: "technology",
+    category: "Science",
     difficulty: 2,
     commentary: "HTTP: The protocol that's been delivering cat videos to your screen since 1991!"
   },
@@ -101,7 +101,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "306",
     optionD: "406",
     correctAnswer: "B",
-    category: "science",
+    category: "Science",
     difficulty: 2,
     commentary: "206 bones, and somehow you still manage to hit your funny bone on everything!"
   },
@@ -112,7 +112,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "299,792 kilometers per hour",
     optionD: "299,792 meters per second",
     correctAnswer: "A",
-    category: "science",
+    category: "Science",
     difficulty: 3,
     commentary: "186,282 miles per second: Fast enough to circle Earth 7.5 times in one second, yet your internet still lags!"
   },
@@ -125,7 +125,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "6",
     optionD: "7",
     correctAnswer: "B",
-    category: "sports",
+    category: "Sport and Leisure",
     difficulty: 1,
     commentary: "5 players: Just enough to argue about who should take the last shot!"
   },
@@ -136,7 +136,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Basketball",
     optionD: "Baseball",
     correctAnswer: "C",
-    category: "sports",
+    category: "Sport and Leisure",
     difficulty: 1,
     commentary: "Slam dunk: The only move that sounds like both a basketball play and a breakfast order!"
   },
@@ -149,7 +149,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Lime",
     optionD: "Onion",
     correctAnswer: "B",
-    category: "food",
+    category: "Food and Drink",
     difficulty: 1,
     commentary: "Avocados: The fruit that millennials allegedly can't afford because they keep putting it on toast!"
   },
@@ -160,7 +160,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Cuba",
     optionD: "Spain",
     correctAnswer: "C",
-    category: "food",
+    category: "Food and Drink",
     difficulty: 2,
     commentary: "Cuba gave us the Mojito: Proof that good things come from mixing mint, rum, and questionable decisions!"
   },
@@ -173,7 +173,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Jane Austen",
     optionD: "Mark Twain",
     correctAnswer: "B",
-    category: "literature",
+    category: "Arts and Literature",
     difficulty: 1,
     commentary: "Shakespeare: Teaching teenagers that communication is key in relationships since 1597!"
   },
@@ -184,7 +184,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "The Philosopher's Stone",
     optionD: "The Goblet of Fire",
     correctAnswer: "C",
-    category: "literature",
+    category: "Arts and Literature",
     difficulty: 1,
     commentary: "The Philosopher's Stone (or Sorcerer's Stone for Americans who apparently can't handle philosophy)!"
   },
@@ -197,7 +197,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Piano",
     optionD: "Synthesizer",
     correctAnswer: "C",
-    category: "music",
+    category: "Music",
     difficulty: 1,
     commentary: "88 keys on a piano: 52 white ones you'll use, and 36 black ones that make you look fancy!"
   },
@@ -208,7 +208,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Prince",
     optionD: "Madonna",
     correctAnswer: "B",
-    category: "music",
+    category: "Music",
     difficulty: 1,
     commentary: "Michael Jackson: The man who made moonwalking look easier than regular walking!"
   },
@@ -221,7 +221,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Vatican City",
     optionD: "Liechtenstein",
     correctAnswer: "C",
-    category: "geography",
+    category: "Geography",
     difficulty: 2,
     commentary: "Vatican City: 0.17 square miles of pure holiness... and gift shops!"
   },
@@ -232,7 +232,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Gold",
     optionD: "Copper",
     correctAnswer: "C",
-    category: "science",
+    category: "Science",
     difficulty: 2,
     commentary: "Au comes from 'Aurum', Latin for gold. Because calling it 'G' would've been too easy!"
   },
@@ -243,7 +243,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Apollo",
     optionD: "Poseidon",
     correctAnswer: "D",
-    category: "mythology",
+    category: "Society and Culture",
     difficulty: 2,
     commentary: "Poseidon: Lord of the seas, earthquakes, and really aggressive dolphins!"
   },
@@ -254,7 +254,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "2007",
     optionD: "2008",
     correctAnswer: "C",
-    category: "technology",
+    category: "Science",
     difficulty: 2,
     commentary: "2007: The year humanity collectively decided that buttons were overrated!"
   },
@@ -265,7 +265,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Italy",
     optionD: "Brazil",
     correctAnswer: "D",
-    category: "sports",
+    category: "Sport and Leisure",
     difficulty: 2,
     commentary: "Brazil with 5 World Cups: They're basically the Avengers of soccer!"
   },
@@ -276,7 +276,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "Yangtze River",
     optionD: "Mississippi River",
     correctAnswer: "B",
-    category: "geography",
+    category: "Geography",
     difficulty: 2,
     commentary: "The Nile: 4,132 miles of 'Are we there yet?'"
   },
@@ -287,7 +287,7 @@ export const seedQuestions: NewQuestion[] = [
     optionC: "3",
     optionD: "4",
     correctAnswer: "C",
-    category: "nature",
+    category: "Science",
     difficulty: 3,
     commentary: "Three hearts: One for the body, two for the gills. Still can't find love on dating apps though!"
   }
