@@ -86,9 +86,7 @@ function GameResults() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerName: playerName.trim(),
-          maxPlayers: 4,
-          questionCount: 10,
-          previousRoomCode: roomCode, // Include previous room code for auto-join
+          previousRoomCode: roomCode, // Auto-join for players; settings carry over from this game
         }),
       })
 

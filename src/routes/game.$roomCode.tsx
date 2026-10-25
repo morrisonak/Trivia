@@ -235,17 +235,25 @@ function GameLobby() {
                 </div>
               ))}
 
-              {/* Empty slots */}
-              {Array.from({ length: Math.max(0, gameState.maxPlayers - gameState.players.length) }).map(
-                (_, i) => (
-                  <div
-                    key={`empty-${i}`}
-                    className="flex items-center p-3 rounded-lg border border-white/10 bg-white/5 border-dashed"
-                  >
-                    <span className="text-gray-500">Waiting for player...</span>
-                  </div>
-                )
-              )}
+              {/* Empty slots: one row each for small rooms, a single summary row for big ones */}
+              {gameState.maxPlayers <= 4
+                ? Array.from({ length: Math.max(0, gameState.maxPlayers - gameState.players.length) }).map(
+                    (_, i) => (
+                      <div
+                        key={`empty-${i}`}
+                        className="flex items-center p-3 rounded-lg border border-white/10 bg-white/5 border-dashed"
+                      >
+                        <span className="text-gray-500">Waiting for player...</span>
+                      </div>
+                    )
+                  )
+                : gameState.players.length < gameState.maxPlayers && (
+                    <div className="flex items-center p-3 rounded-lg border border-white/10 bg-white/5 border-dashed">
+                      <span className="text-gray-500">
+                        Waiting for players... ({gameState.maxPlayers - gameState.players.length} spots open)
+                      </span>
+                    </div>
+                  )}
             </div>
           </div>
 

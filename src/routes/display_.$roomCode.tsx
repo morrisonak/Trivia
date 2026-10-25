@@ -307,6 +307,12 @@ function BigBoardDisplay() {
     wsRef.current = ws
   }
 
+  // Layout density for bigger rooms (up to 16 players) so everything fits on one TV screen
+  const lobbyColumns = displayState.maxPlayers <= 4 ? 'grid-cols-2' : displayState.maxPlayers <= 8 ? 'grid-cols-3' : 'grid-cols-4'
+  const compactLobby = displayState.maxPlayers > 4
+  const crowded = displayState.players.length > 8
+  const answeredCount = displayState.players.filter(p => playerAnswerStatus.get(p.id)).length
+
   const renderLobby = () => (
     <div className="flex flex-col items-center justify-center min-h-screen p-8">
       <div className="text-center mb-12">
@@ -329,7 +335,7 @@ function BigBoardDisplay() {
         </div>
       </div>
 
-      <div className="w-full max-w-4xl">
+      <div className={`w-full ${compactLobby ? 'max-w-7xl' : 'max-w-4xl'}`}>
         <div className="flex items-center justify-center gap-3 mb-8">
           <Users className="w-10 h-10 text-yellow-400" />
           <h2 className="text-4xl font-bold text-white">
@@ -337,32 +343,32 @@ function BigBoardDisplay() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className={`grid ${lobbyColumns} ${compactLobby ? 'gap-4' : 'gap-6'}`}>
           {displayState.players.map((player, index) => (
             <div
               key={player.id}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border-2 border-white/20 animate-slide-in flex items-center justify-between"
+              className={`bg-white/10 backdrop-blur-sm rounded-xl border-2 border-white/20 animate-slide-in flex items-center justify-between min-w-0 ${compactLobby ? 'p-4' : 'p-6'}`}
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div className="flex items-center gap-4">
-                <div className="text-5xl font-bold text-yellow-400">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className={`font-bold text-yellow-400 ${compactLobby ? 'text-3xl' : 'text-5xl'}`}>
                   {index + 1}
                 </div>
-                <span className="text-3xl text-white font-semibold">
+                <span className={`text-white font-semibold truncate ${compactLobby ? 'text-2xl' : 'text-3xl'}`}>
                   {player.name}
                 </span>
               </div>
               {player.isHost && (
-                <Crown className="w-8 h-8 text-yellow-400" />
+                <Crown className="w-8 h-8 text-yellow-400 shrink-0" />
               )}
             </div>
           ))}
 
-          {/* Empty slots */}
-          {Array.from({ length: Math.max(0, displayState.maxPlayers - displayState.players.length) }).map((_, i) => (
+          {/* Empty slots (skipped for big rooms, where they'd crowd the screen) */}
+          {displayState.maxPlayers <= 8 && Array.from({ length: Math.max(0, displayState.maxPlayers - displayState.players.length) }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="bg-white/5 rounded-xl p-6 border-2 border-white/10 border-dashed flex items-center justify-center"
+              className={`bg-white/5 rounded-xl border-2 border-white/10 border-dashed flex items-center justify-center ${compactLobby ? 'p-4' : 'p-6'}`}
             >
               <span className="text-2xl text-gray-500">Waiting...</span>
             </div>
@@ -453,20 +459,27 @@ function BigBoardDisplay() {
           </div>
 
           {/* Player Status Bar */}
-          <div className="flex justify-center gap-6">
+          {!displayState.showResults && (
+            <p className="text-center text-2xl text-gray-300 mb-4">
+              <span className="font-bold text-white">{answeredCount}</span> of {displayState.players.length} answered
+            </p>
+          )}
+          <div className={`flex flex-wrap justify-center ${crowded ? 'gap-3' : 'gap-6'}`}>
             {displayState.players.map((player) => (
               <div
                 key={player.id}
-                className="bg-white/10 rounded-xl px-6 py-3 border border-white/20"
+                className={`rounded-xl border transition-colors ${crowded ? 'px-4 py-2' : 'px-6 py-3'} ${
+                  playerAnswerStatus.get(player.id) ? 'bg-green-500/15 border-green-400/40' : 'bg-white/10 border-white/20'
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xl text-white">{player.name}</span>
+                  <span className={`text-white max-w-[12rem] truncate ${crowded ? 'text-lg' : 'text-xl'}`}>{player.name}</span>
                   {playerAnswerStatus.get(player.id) ? (
                     <CheckCircle className="w-6 h-6 text-green-400" />
                   ) : (
                     <Loader2 className="w-6 h-6 text-yellow-400 animate-spin" />
                   )}
-                  <span className="text-xl font-bold text-yellow-400">
+                  <span className={`font-bold text-yellow-400 ${crowded ? 'text-lg' : 'text-xl'}`}>
                     {player.score}
                   </span>
                 </div>
@@ -480,24 +493,24 @@ function BigBoardDisplay() {
 
   const renderResults = () => (
     <div className="min-h-screen p-8 flex flex-col items-center justify-center">
-      <Trophy className="w-32 h-32 text-yellow-400 mb-8 animate-bounce" />
+      <Trophy className={`text-yellow-400 animate-bounce ${crowded ? 'w-20 h-20 mb-4' : 'w-32 h-32 mb-8'}`} />
 
-      <h1 className="text-7xl font-black text-white mb-4 animate-slam-in">
+      <h1 className={`font-black text-white mb-4 animate-slam-in ${crowded ? 'text-6xl' : 'text-7xl'}`}>
         {displayState.winner ? `${displayState.winner.name} Wins!` : 'Game Over!'}
       </h1>
 
       {displayState.winner && (
-        <p className="text-4xl text-yellow-400 mb-12 animate-rise-in" style={{ animationDelay: '0.5s' }}>
+        <p className={`text-4xl text-yellow-400 animate-rise-in ${crowded ? 'mb-6' : 'mb-12'}`} style={{ animationDelay: '0.5s' }}>
           Final Score: {displayState.winner.score}
         </p>
       )}
 
-      <div className="w-full max-w-4xl">
-        <h2 className="text-4xl font-bold text-white text-center mb-8">
+      <div className={`w-full ${crowded ? 'max-w-7xl' : 'max-w-4xl'}`}>
+        <h2 className={`text-4xl font-bold text-white text-center ${crowded ? 'mb-4' : 'mb-8'}`}>
           Final Leaderboard
         </h2>
 
-        <div className="space-y-4">
+        <div className={crowded ? 'grid grid-cols-2 gap-3' : 'space-y-4'}>
           {[...displayState.players]
             .sort((a, b) => b.score - a.score)
             .map((player, index, all) => {
@@ -507,7 +520,7 @@ function BigBoardDisplay() {
               return (
                 <div
                   key={player.id}
-                  className={`flex items-center justify-between p-6 rounded-xl animate-slide-in ${
+                  className={`flex items-center justify-between rounded-xl animate-slide-in ${crowded ? 'px-5 py-3' : 'p-6'} ${
                     rank === 1
                       ? 'bg-yellow-400/20 border-2 border-yellow-400'
                       : 'bg-white/10 border border-white/20'
@@ -515,14 +528,14 @@ function BigBoardDisplay() {
                   style={{ animationDelay: `${0.8 + (all.length - 1 - index) * 0.25}s` }}
                 >
                   <div className="flex items-center gap-6">
-                    <span className="text-4xl font-bold text-white">
+                    <span className={`font-bold text-white ${crowded ? 'text-3xl' : 'text-4xl'}`}>
                       {rankEmoji}
                     </span>
-                    <span className="text-3xl text-white font-semibold">
+                    <span className={`text-white font-semibold truncate ${crowded ? 'text-2xl' : 'text-3xl'}`}>
                       {player.name}
                     </span>
                   </div>
-                  <div className="text-4xl font-bold text-yellow-400">
+                  <div className={`font-bold text-yellow-400 ${crowded ? 'text-3xl' : 'text-4xl'}`}>
                     {player.score}
                   </div>
                 </div>
@@ -531,7 +544,7 @@ function BigBoardDisplay() {
         </div>
       </div>
 
-      <div className="mt-12 text-3xl text-gray-400">
+      <div className={`text-3xl text-gray-400 ${crowded ? 'mt-6' : 'mt-12'}`}>
         Thanks for playing!
       </div>
       <p className="mt-4 text-xl text-gray-500 animate-pulse">

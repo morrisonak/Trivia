@@ -9,6 +9,7 @@ const START_DELAY_MS = 3000
 const INTRO_DELAY_MS = 2500
 // Questions used in this many recent games are picked last
 const RECENT_GAMES_TO_AVOID = 15
+const MAX_PLAYERS_LIMIT = 16
 
 interface Player {
   id: string
@@ -232,7 +233,7 @@ export class GameRoom extends DurableObject<Env> {
     this.state = freshState()
     this.state.roomCode = roomCode
     this.state.questionCount = Math.min(Math.max(1, questionCount), 25)
-    this.state.maxPlayers = Math.min(Math.max(2, maxPlayers), 10)
+    this.state.maxPlayers = Math.min(Math.max(2, maxPlayers), MAX_PLAYERS_LIMIT)
 
     const hostId = crypto.randomUUID()
     this.state.players.set(hostId, {

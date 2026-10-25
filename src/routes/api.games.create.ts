@@ -21,7 +21,8 @@ export const Route = createFileRoute('/api/games/create')({
             maxPlayers?: number
             previousRoomCode?: string
           }
-          const { playerName, questionCount = 10, maxPlayers = 4, previousRoomCode } = data
+          const { playerName, previousRoomCode } = data
+          let { questionCount = 10, maxPlayers = 8 } = data
 
           if (!playerName) {
             return Response.json(
@@ -37,6 +38,14 @@ export const Route = createFileRoute('/api/games/create')({
           if (previousRoomCode) {
             const prevId = env.GAME_ROOM.idFromName(previousRoomCode.toUpperCase())
             const prevStub = env.GAME_ROOM.get(prevId)
+
+            // Play Again reuses the previous game's settings unless new ones were given
+            const prevState = await prevStub.fetch(new Request('https://fake-host/state'))
+            if (prevState.ok) {
+              const prev = await prevState.json() as { maxPlayers?: number; questionCount?: number }
+              if (data.maxPlayers === undefined && prev.maxPlayers) maxPlayers = prev.maxPlayers
+              if (data.questionCount === undefined && prev.questionCount) questionCount = prev.questionCount
+            }
 
             await prevStub.fetch(
               new Request('https://fake-host/set-next-game', {

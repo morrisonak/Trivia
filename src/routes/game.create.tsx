@@ -10,7 +10,7 @@ export const Route = createFileRoute('/game/create')({
 function CreateGame() {
   const navigate = useNavigate()
   const [playerName, setPlayerName] = useState('')
-  const [maxPlayers, setMaxPlayers] = useState(4)
+  const [maxPlayers, setMaxPlayers] = useState(8)
   const [questionCount, setQuestionCount] = useState(10)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
@@ -96,8 +96,8 @@ function CreateGame() {
                 <Users className="inline w-4 h-4 mr-2" />
                 Max Players
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[2, 3, 4].map((num) => (
+              <div className="grid grid-cols-5 gap-2">
+                {[4, 6, 8, 12, 16].map((num) => (
                   <button
                     key={num}
                     type="button"
@@ -109,7 +109,7 @@ function CreateGame() {
                         : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
                     }`}
                   >
-                    {num} Players
+                    {num}
                   </button>
                 ))}
               </div>

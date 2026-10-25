@@ -12,8 +12,8 @@ function HomePage() {
     },
     {
       icon: <Users className="w-10 h-10" />,
-      title: '2-4 Players',
-      description: 'Perfect for small groups and family game nights',
+      title: '2-16 Players',
+      description: 'From family game night to a full party',
     },
     {
       icon: <Monitor className="w-10 h-10" />,
@@ -120,7 +120,7 @@ function HomePage() {
               </div>
               <h3 className="text-white font-bold mb-2">Wait for Players</h3>
               <p className="text-gray-300 text-sm">
-                2-4 players needed to start
+                2-16 players per game
               </p>
             </div>
             <div className="text-center">
